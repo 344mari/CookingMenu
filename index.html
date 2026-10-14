@@ -1346,7 +1346,8 @@
         <div class="tags">${x.missing.length ? x.missing.map((m) => `<span class="tag missing">${escapeHtml(withUsage(m, r.amounts))}</span>`).join('') : '<span class="tag">なし（全部揃っています 🎉）</span>'}</div>
         ${seas.length ? `<p class="seasonings">🧂 調味料：${seas.map((n) => escapeHtml(withUsage(n, r.amounts))).join('、')}</p>` : ''}
         <div class="card-actions">
-          ${url ? `<a class="recipe-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">📖 レシピを見る ↗</a>` : ''}
+          ${url ? `<a class="recipe-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">📖 レシピを見る ↗</a>`
+            : `<a class="recipe-link" href="https://www.google.com/search?q=${encodeURIComponent(`${r.name} レシピ`)}" target="_blank" rel="noopener noreferrer">🔍 レシピを検索 ↗</a>`}
           <button type="button" class="secondary cook-btn" data-name="${escapeHtml(r.name)}">📅 今日作った</button>
         </div>
       </article>`;
