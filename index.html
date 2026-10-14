@@ -214,6 +214,14 @@
     border: 1px solid var(--accent); border-radius: 10px; padding: 8px 14px;
   }
   .notice { font-size: .9rem; color: var(--muted); margin: 12px 0 0; }
+  button.secondary {
+    font: inherit; font-weight: 700; color: var(--accent); background: none;
+    border: 1px solid var(--accent); border-radius: 10px; padding: 8px 14px; min-height: 44px; cursor: pointer;
+  }
+  .share-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .import-box { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--chip); }
+  .import-box p { margin: 0 0 10px; font-size: .9rem; }
+  .import-box .row button { flex: 1; }
   .notice a { color: var(--accent); font-weight: 700; }
   .error { color: var(--danger); }
 </style>
@@ -241,6 +249,17 @@
         <button class="link" id="clear-btn" hidden>すべて削除</button>
       </div>
       <div style="margin-top:12px"><ul class="stock" id="stock-list"></ul></div>
+    </section>
+
+    <section aria-labelledby="share-h">
+      <h2 id="share-h">🔁 在庫を共有</h2>
+      <p class="notice" style="margin:0 0 12px">在庫をCSVファイルで書き出して送ったり、受け取ったCSVを読み込んだりできます。</p>
+      <div class="share-actions">
+        <button type="button" class="secondary" id="export-btn">CSVで書き出す</button>
+        <button type="button" class="secondary" id="import-btn">CSVを読み込む</button>
+      </div>
+      <input type="file" id="import-file" accept=".csv,text/csv,text/comma-separated-values" hidden>
+      <div class="import-box" id="import-box" hidden></div>
     </section>
   </div>
 
@@ -636,6 +655,152 @@
     stock = [];
     saveStock();
     renderStock();
+  });
+
+  // ---------- CSV で共有 ----------
+  // 列: 名前, 種類(食材/既製品), 購入日, 賞味期限, 残り数, 単位, 残り目安(たっぷり/半分くらい/少し)
+  const CSV_HEADER = ['名前', '種類', '購入日', '賞味期限', '残り数', '単位', '残り目安'];
+  function csvCell(v) {
+    let t = v == null ? '' : String(v);
+    if (/^[=+\-@]/.test(t)) t = "'" + t; // 表計算ソフトで数式として扱われないように
+    return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  }
+  function stockToCsv() {
+    const rows = sortedStock().map((s) => {
+      const a = s.amount;
+      return [
+        s.name, s.product ? '既製品' : '食材', s.bought || '', s.expiry || '',
+        a && a.type === 'count' ? a.n : '', a && a.type === 'count' ? a.unit : '',
+        a && a.type === 'level' ? LEVELS[a.level] || '' : '',
+      ];
+    });
+    return '﻿' + [CSV_HEADER, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  }
+  function parseCsv(text) {
+    const rows = [];
+    let row = [], cell = '', quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (quoted) {
+        if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+        else if (c === '"') quoted = false;
+        else cell += c;
+      } else if (c === '"') quoted = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); rows.push(row); row = []; cell = '';
+      } else cell += c;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter((r) => r.some((v) => v.trim() !== ''));
+  }
+  // 2026-10-14 / 2026/10/14 / 2026/1/5 を YYYY-MM-DD に。読めなければ null
+  function csvDate(v) {
+    const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(v.trim());
+    if (!m) return null;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return d.getMonth() === Number(m[2]) - 1 ? toYmd(d) : null;
+  }
+  // CSV の行を在庫データに。名前がない行は読み飛ばす
+  function csvToStock(text) {
+    const rows = parseCsv(text.replace(/^﻿/, ''));
+    if (!rows.length) return { items: [], skipped: 0 };
+    const head = rows[0].map((h) => h.trim());
+    const col = (name) => head.indexOf(name);
+    if (col('名前') < 0) throw new Error('1行目に「名前」の列が見つかりません');
+    const levelKey = Object.fromEntries(Object.entries(LEVELS).map(([k, v]) => [v, k]));
+    const items = [];
+    let skipped = 0;
+    rows.slice(1).forEach((r, i) => {
+      const get = (name) => (col(name) >= 0 ? (r[col(name)] || '').trim().replace(/^'(?=[=+\-@])/, '') : '');
+      const name = get('名前').slice(0, 40);
+      if (!name) { skipped++; return; }
+      const kind = get('種類');
+      const s = {
+        id: Date.now().toString(36) + i.toString(36) + Math.random().toString(36).slice(2, 6),
+        name, bought: csvDate(get('購入日')), expiry: csvDate(get('賞味期限')), amount: null,
+      };
+      const n = get('残り数');
+      if (n !== '' && Number.isFinite(Number(n))) {
+        s.amount = { type: 'count', n: Math.max(0, Math.round(Number(n))), unit: UNITS.includes(get('単位')) ? get('単位') : UNITS[0] };
+      } else if (levelKey[get('残り目安')]) {
+        s.amount = { type: 'level', level: levelKey[get('残り目安')] };
+      }
+      // 種類が空ならリストにない名前を既製品とみなす
+      if (kind === '既製品' || (!kind && !CATALOG_NAMES.includes(name))) s.product = true;
+      items.push(s);
+    });
+    return { items, skipped };
+  }
+  // UTF-8 で読めなければ Shift_JIS（Excel で保存した CSV）として読む
+  async function readCsvFile(file) {
+    const buf = await file.arrayBuffer();
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    } catch (e) {
+      return new TextDecoder('shift_jis').decode(buf);
+    }
+  }
+
+  $('export-btn').addEventListener('click', async () => {
+    if (!stock.length) { alert('在庫がまだありません'); return; }
+    const filename = `zaiko_${toYmd(today())}.csv`; // 日本語のファイル名は端末によって落ちるので英字にする
+    const blob = new Blob([stockToCsv()], { type: 'text/csv' });
+    // スマホでは共有メニュー（LINE など）を開く。使えなければファイルとして保存する
+    const file = typeof File === 'function' ? new File([blob], filename, { type: 'text/csv' }) : null;
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: '冷蔵庫の在庫' });
+        return;
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+      }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  let pendingImport = null;
+  $('import-btn').addEventListener('click', () => $('import-file').click());
+  $('import-file').addEventListener('change', async () => {
+    const file = $('import-file').files[0];
+    $('import-file').value = '';
+    if (!file) return;
+    const box = $('import-box');
+    box.hidden = false;
+    try {
+      const { items, skipped } = csvToStock(await readCsvFile(file));
+      if (!items.length) throw new Error('読み込める在庫がありませんでした');
+      pendingImport = items;
+      box.innerHTML = `
+        <p>「${escapeHtml(file.name)}」から <strong>${items.length}件</strong> 読み込みました。${skipped ? `（名前がない ${skipped}行は読み飛ばしました）` : ''}<br>今の在庫（${stock.length}件）にどう反映しますか？</p>
+        <div class="row">
+          <button type="button" class="primary" data-import="replace">置き換える</button>
+          <button type="button" class="secondary" data-import="add">追加する</button>
+        </div>
+        <button type="button" class="link" data-import="cancel" style="margin-top:6px">やめる</button>`;
+    } catch (e) {
+      pendingImport = null;
+      box.innerHTML = `<p class="error">CSVを読み込めませんでした：${escapeHtml(e.message)}</p>
+        <button type="button" class="link" data-import="cancel">閉じる</button>`;
+    }
+  });
+  $('import-box').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-import]');
+    if (!btn) return;
+    const mode = btn.dataset.import;
+    if (mode === 'replace' && pendingImport) stock = pendingImport;
+    if (mode === 'add' && pendingImport) stock = stock.concat(pendingImport);
+    if (mode !== 'cancel') { saveStock(); renderStock(); }
+    pendingImport = null;
+    $('import-box').hidden = true;
+    $('import-box').innerHTML = '';
   });
 
   // ---------- レシピ ----------
