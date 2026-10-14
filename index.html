@@ -71,19 +71,10 @@
     padding: 16px;
     margin-bottom: 16px;
   }
-  .tabs {
-    display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
-    margin: 0 -16px 12px; padding: 0 16px 2px;
-  }
-  .tabs::-webkit-scrollbar { display: none; }
-  .tab {
-    flex: none;
-    font: inherit; font-size: .9rem;
-    background: none; color: var(--text);
-    border: 1px solid var(--border); border-radius: 999px;
-    padding: 6px 12px; min-height: 36px; cursor: pointer; white-space: nowrap;
-  }
-  .tab[aria-selected="true"] { color: var(--accent); border-color: var(--accent); font-weight: 700; }
+  .finder { display: grid; grid-template-columns: 1fr minmax(0, 42%); gap: 8px; margin-bottom: 12px; }
+  .finder input[type="search"] { margin-bottom: 0; min-width: 0; }
+  .finder select { width: 100%; min-width: 0; }
+  .finder select.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
   .badge {
     display: inline-block; min-width: 1.4em; margin-left: 4px; padding: 0 5px;
     border-radius: 999px; background: var(--accent); color: var(--accent-text);
@@ -223,9 +214,11 @@
   <div class="screen" id="screen-stock">
     <section aria-labelledby="add-h">
       <h2 id="add-h">食材を登録</h2>
-      <input type="search" id="cat-search" placeholder="食材名で検索・既製品名を入力" aria-label="食材名で検索、または既製品名を入力" autocomplete="off" enterkeyhint="search">
-      <div class="tabs" id="cat-tabs" role="tablist" aria-label="食材のカテゴリ"></div>
-      <div id="catalog" role="tabpanel"></div>
+      <div class="finder">
+        <input type="search" id="cat-search" placeholder="食材名・既製品名" aria-label="食材名で検索、または既製品名を入力" autocomplete="off" enterkeyhint="search">
+        <select id="cat-select" aria-label="カテゴリから選ぶ"></select>
+      </div>
+      <div id="catalog"></div>
       <p class="selected-note" id="selected-note"></p>
       <ul class="picked" id="picked"></ul>
       <button class="primary wide" id="add-btn" hidden>在庫に追加</button>
@@ -423,12 +416,14 @@
   function chipHtml(name) {
     return `<button type="button" class="chip" data-name="${escapeHtml(name)}" aria-pressed="${selected.has(name)}">${escapeHtml(name)}</button>`;
   }
-  // 最初は食材を並べず、食材名で検索するかカテゴリのタブを押したときだけ候補を出す
+  // 最初は食材を並べず、食材名で検索するかカテゴリのプルダウンで選んだときだけ候補を出す
   function renderCatalog() {
-    $('cat-tabs').innerHTML = Object.keys(CATALOG).map((cat) => {
+    // カテゴリ名の後ろに、そのカテゴリで選んでいる数を出す
+    $('cat-select').innerHTML = `<option value="">カテゴリ</option>` + Object.keys(CATALOG).map((cat) => {
       const n = CATALOG[cat].filter((name) => selected.has(name)).length;
-      return `<button type="button" class="tab" role="tab" data-cat="${escapeHtml(cat)}" aria-selected="${cat === activeCat}">${escapeHtml(cat)}${n ? `<span class="badge">${n}</span>` : ''}</button>`;
+      return `<option value="${escapeHtml(cat)}"${cat === activeCat ? ' selected' : ''}>${escapeHtml(cat)}${n ? `（${n}）` : ''}</option>`;
     }).join('');
+    $('cat-select').classList.toggle('on', !!activeCat);
     const q = normalize($('cat-search').value);
     if (q) {
       const raw = $('cat-search').value.trim().slice(0, 40);
@@ -443,15 +438,13 @@
       $('catalog').innerHTML = '';
     }
   }
-  // 検索とタブはどちらか一方だけ効かせる
+  // 検索とカテゴリはどちらか一方だけ効かせる
   $('cat-search').addEventListener('input', () => {
     if ($('cat-search').value.trim()) activeCat = null;
     renderCatalog();
   });
-  $('cat-tabs').addEventListener('click', (e) => {
-    const tab = e.target.closest('.tab');
-    if (!tab) return;
-    activeCat = activeCat === tab.dataset.cat ? null : tab.dataset.cat; // 開いているタブをもう一度押すと閉じる
+  $('cat-select').addEventListener('change', () => {
+    activeCat = $('cat-select').value || null; // 「カテゴリ」に戻すと閉じる
     $('cat-search').value = '';
     renderCatalog();
   });
