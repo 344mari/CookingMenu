@@ -43,7 +43,7 @@
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font-family: "Hiragino Maru Gothic ProN", "Hiragino Maru Gothic Pro", system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
     font-size: 16px;
     line-height: 1.5;
   }
@@ -84,7 +84,6 @@
     font-size: .75rem; font-weight: 700; line-height: 1.4em; text-align: center;
   }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-  .emo { margin-right: .25em; }
   .chip {
     border: 1px solid var(--border);
     background: var(--chip);
@@ -270,7 +269,7 @@
           </select>
         </div>
       </div>
-      <button class="primary wide" id="suggest-btn">✨ 献立を提案 ✨</button>
+      <button class="primary wide" id="suggest-btn">献立を提案</button>
       <div id="results" aria-live="polite"></div>
     </section>
   </div>
@@ -302,21 +301,9 @@
     '卵': 'たまご', '牛乳': 'ぎゅうにゅう', '豆腐': 'とうふ', '油揚げ': 'あぶらあげ', '納豆': 'なっとう',
     '中華麺': 'ちゅうかめん', '柿': 'かき',
   };
-  // 見た目用の絵文字。ない食材はカテゴリの絵文字を使う
+  // 見た目用の絵文字（カテゴリと料理のタイプ）
   const CAT_EMOJI = {
     '野菜・きのこ': '🥬', '肉': '🍖', '魚介': '🐟', '卵・乳製品・大豆': '🥚', 'フルーツ': '🍎', '主食・その他': '🍚',
-  };
-  const EMOJI = {
-    '玉ねぎ': '🧅', 'にんじん': '🥕', 'じゃがいも': '🥔', 'キャベツ': '🥬', '白菜': '🥬', 'ねぎ': '🌿', 'ピーマン': '🫑',
-    'なす': '🍆', 'トマト': '🍅', 'きゅうり': '🥒', 'ほうれん草': '🥬', 'ブロッコリー': '🥦', 'もやし': '🌱', 'レタス': '🥬',
-    'かぼちゃ': '🎃', 'しめじ': '🍄', 'えのき': '🍄', 'ごぼう': '🌿', 'にら': '🌿',
-    '豚肉': '🐷', '鶏もも肉': '🍗', '鶏むね肉': '🍗', '牛肉': '🥩', 'ひき肉': '🥩', 'ベーコン': '🥓', 'ハム': '🍖', 'ウインナー': '🌭',
-    '鮭': '🐟', 'さば': '🐟', 'ぶり': '🐟', 'えび': '🦐', 'いか': '🦑', 'ツナ缶': '🥫',
-    '卵': '🥚', '牛乳': '🥛', 'チーズ': '🧀', 'バター': '🧈', '豆腐': '🫘', '油揚げ': '🫘', '納豆': '🫘',
-    'りんご': '🍎', 'バナナ': '🍌', 'みかん': '🍊', 'オレンジ': '🍊', 'グレープフルーツ': '🍊', 'レモン': '🍋', 'いちご': '🍓',
-    'ぶどう': '🍇', 'キウイ': '🥝', 'もも': '🍑', 'なし': '🍐', 'パイナップル': '🍍', 'メロン': '🍈', 'すいか': '🍉',
-    'ブルーベリー': '🫐', 'アボカド': '🥑',
-    'ごはん': '🍚', 'うどん': '🍜', 'パスタ': '🍝', '中華麺': '🍜', 'カレールウ': '🍛', 'キムチ': '🌶️',
   };
   const TYPE_EMOJI = { '和食': '🍙', '洋食': '🍝', '中華': '🥟', 'エスニック': '🌶️' };
   const STORAGE_KEY = 'cookingMenu.stock';
@@ -462,15 +449,6 @@
       .replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
   }
   const CATALOG_NAMES = Object.values(CATALOG).flat();
-  const CAT_OF = Object.fromEntries(Object.entries(CATALOG).flatMap(([cat, items]) => items.map((n) => [n, cat])));
-  // 名前の前に付ける絵文字（既製品は 🛍️、リスト外は 🍴）
-  function emojiOf(name, product) {
-    if (product) return '🛍️';
-    return EMOJI[name] || CAT_EMOJI[CAT_OF[name]] || '🍴';
-  }
-  function withEmoji(name, product) {
-    return `<span class="emo" aria-hidden="true">${emojiOf(name, product)}</span>${escapeHtml(name)}`;
-  }
   // 入力がリストの食材名（またはよみ）とぴったり一致すれば、その食材名
   function exactCatalogName(q) {
     return CATALOG_NAMES.find((name) => normalize(name) === q || normalize(READINGS[name] || '').split(' ').includes(q));
@@ -480,7 +458,7 @@
       normalize(name).includes(q) || normalize(READINGS[name] || '').includes(q));
   }
   function chipHtml(name) {
-    return `<button type="button" class="chip" data-name="${escapeHtml(name)}" aria-pressed="${selected.has(name)}">${withEmoji(name)}</button>`;
+    return `<button type="button" class="chip" data-name="${escapeHtml(name)}" aria-pressed="${selected.has(name)}">${escapeHtml(name)}</button>`;
   }
   // 最初は食材を並べず、食材名で検索するかカテゴリのプルダウンで選んだときだけ候補を出す
   function renderCatalog() {
@@ -519,7 +497,7 @@
     $('selected-note').textContent = selected.size ? `選んだ食材 ${selected.size}件（購入日・賞味期限・残りの量は任意）` : '食材名で検索するか、カテゴリを選んでください。リストにない既製品は名前を入力して追加できます';
     $('picked').innerHTML = [...selected].map(([name, item]) => `
       <li data-name="${escapeHtml(name)}">
-        <span class="name">${withEmoji(name, item.product)}${item.product ? '<span class="kind">既製品</span>' : ''}</span>
+        <span class="name">${escapeHtml(name)}${item.product ? '<span class="kind">既製品</span>' : ''}</span>
         <button type="button" class="del" aria-label="${escapeHtml(name)}を選択から外す">×</button>
         ${fieldsHtml(item, name)}
       </li>`).join('');
@@ -610,7 +588,7 @@
     }
     $('stock-list').innerHTML = list.map((s) => `
       <li class="${isUrgent(s.days) ? 'urgent' : ''}" data-id="${escapeHtml(s.id)}">
-        <button type="button" class="item-btn" aria-label="${escapeHtml(s.name)}の購入日・賞味期限・残りの量を変更">${withEmoji(s.name, s.product)}${s.product ? '<span class="kind">既製品</span>' : ''}${subLabel(s)}</button>
+        <button type="button" class="item-btn" aria-label="${escapeHtml(s.name)}の購入日・賞味期限・残りの量を変更">${escapeHtml(s.name)}${s.product ? '<span class="kind">既製品</span>' : ''}${subLabel(s)}</button>
         <button type="button" class="exp-btn" aria-label="${escapeHtml(s.name)}の購入日・賞味期限・残りの量を変更">${expiryCell(s)}</button>
         <button type="button" class="del" aria-label="${escapeHtml(s.name)}を削除">×</button>
         ${s.id === editingId ? `
@@ -747,9 +725,9 @@
         <p class="meta">⏱️ ${escapeHtml(r.time)}分 ・ ${TYPE_EMOJI[r.type] || '🍴'} ${escapeHtml(r.type || '')} ・ 在庫で${pct}%揃う${pct === 100 ? ' 🎉' : ''}</p>
         <div class="bar"><span style="width:${pct}%"></span></div>
         <div class="label">✅ 使える在庫</div>
-        <div class="tags">${x.have.map((h) => `<span class="tag${isUrgent(h.days) ? ' urgent' : ''}">${withEmoji(h.name)}${isUrgent(h.days) ? `（${escapeHtml(expiryLabel(h.days))}）` : ''}</span>`).join('')}</div>
+        <div class="tags">${x.have.map((h) => `<span class="tag${isUrgent(h.days) ? ' urgent' : ''}">${escapeHtml(h.name)}${isUrgent(h.days) ? `（${escapeHtml(expiryLabel(h.days))}）` : ''}</span>`).join('')}</div>
         <div class="label">🛒 足りない食材</div>
-        <div class="tags">${x.missing.length ? x.missing.map((m) => `<span class="tag missing">${withEmoji(m)}</span>`).join('') : '<span class="tag">なし（全部揃っています 🎉）</span>'}</div>
+        <div class="tags">${x.missing.length ? x.missing.map((m) => `<span class="tag missing">${escapeHtml(m)}</span>`).join('') : '<span class="tag">なし（全部揃っています 🎉）</span>'}</div>
         ${url ? `<a class="recipe-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">📖 レシピを見る ↗</a>` : ''}
       </article>`;
   }
