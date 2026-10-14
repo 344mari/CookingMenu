@@ -62,15 +62,14 @@
     margin: 0 -16px 12px; padding: 0 16px 2px;
   }
   .tabs::-webkit-scrollbar { display: none; }
-  .tabs[hidden] { display: none; }
   .tab {
     flex: none;
     font: inherit; font-size: .9rem;
-    background: none; color: var(--muted);
-    border: none; border-bottom: 2px solid transparent;
-    padding: 8px 10px; min-height: 40px; cursor: pointer; white-space: nowrap;
+    background: none; color: var(--text);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 12px; min-height: 36px; cursor: pointer; white-space: nowrap;
   }
-  .tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+  .tab[aria-selected="true"] { color: var(--accent); border-color: var(--accent); font-weight: 700; }
   .tab .badge {
     display: inline-block; min-width: 1.4em; margin-left: 4px; padding: 0 5px;
     border-radius: 999px; background: var(--accent); color: var(--accent-text);
@@ -247,7 +246,7 @@
 
   const $ = (id) => document.getElementById(id);
   const selected = new Set();
-  let activeCat = Object.keys(CATALOG)[0];
+  let activeCat = null; // 開いているカテゴリ。null なら食材は並べない
   let stock = loadStock();
   let recipes = null;
   let recipesError = null;
@@ -308,33 +307,39 @@
   function chipHtml(name) {
     return `<button type="button" class="chip" data-name="${escapeHtml(name)}" aria-pressed="${selected.has(name)}">${escapeHtml(name)}</button>`;
   }
-  // カテゴリはタブで切り替え、選んだカテゴリの食材だけを並べる。検索中は全カテゴリから一致するものを並べる
+  // 最初は食材を並べず、食材名で検索するかカテゴリのタブを押したときだけ候補を出す
   function renderCatalog() {
+    $('cat-tabs').innerHTML = Object.keys(CATALOG).map((cat) => {
+      const n = CATALOG[cat].filter((name) => selected.has(name)).length;
+      return `<button type="button" class="tab" role="tab" data-cat="${escapeHtml(cat)}" aria-selected="${cat === activeCat}">${escapeHtml(cat)}${n ? `<span class="badge">${n}</span>` : ''}</button>`;
+    }).join('');
     const q = normalize($('cat-search').value);
-    $('cat-tabs').hidden = !!q;
     if (q) {
       const hits = searchCatalog(q);
       $('catalog').innerHTML = hits.length
         ? `<div class="chips">${hits.map(chipHtml).join('')}</div>`
         : `<p class="empty">「${escapeHtml($('cat-search').value.trim())}」に一致する食材はありません</p>`;
-      return;
+    } else if (activeCat) {
+      $('catalog').innerHTML = `<div class="chips">${CATALOG[activeCat].map(chipHtml).join('')}</div>`;
+    } else {
+      $('catalog').innerHTML = '';
     }
-    $('cat-tabs').innerHTML = Object.keys(CATALOG).map((cat) => {
-      const n = CATALOG[cat].filter((name) => selected.has(name)).length;
-      return `<button type="button" class="tab" role="tab" data-cat="${escapeHtml(cat)}" aria-selected="${cat === activeCat}">${escapeHtml(cat)}${n ? `<span class="badge">${n}</span>` : ''}</button>`;
-    }).join('');
-    $('catalog').innerHTML = `<div class="chips">${CATALOG[activeCat].map(chipHtml).join('')}</div>`;
   }
-  $('cat-search').addEventListener('input', renderCatalog);
+  // 検索とタブはどちらか一方だけ効かせる
+  $('cat-search').addEventListener('input', () => {
+    if ($('cat-search').value.trim()) activeCat = null;
+    renderCatalog();
+  });
   $('cat-tabs').addEventListener('click', (e) => {
     const tab = e.target.closest('.tab');
     if (!tab) return;
-    activeCat = tab.dataset.cat;
+    activeCat = activeCat === tab.dataset.cat ? null : tab.dataset.cat; // 開いているタブをもう一度押すと閉じる
+    $('cat-search').value = '';
     renderCatalog();
   });
   function updateSelection() {
     renderCatalog();
-    $('selected-note').textContent = selected.size ? `選択中: ${[...selected].join('、')}` : '食材をタップして選んでください（複数可）';
+    $('selected-note').textContent = selected.size ? `選択中: ${[...selected].join('、')}` : '食材名で検索するか、カテゴリを選んでください';
     $('add-btn').disabled = selected.size === 0;
   }
   $('catalog').addEventListener('click', (e) => {
@@ -353,6 +358,7 @@
     selected.clear();
     $('expiry').value = '';
     $('cat-search').value = '';
+    activeCat = null;
     updateSelection();
     renderStock();
   });
