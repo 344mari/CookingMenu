@@ -234,6 +234,22 @@
   .import-box { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--chip); }
   .import-box p { margin: 0 0 10px; font-size: .9rem; }
   .import-box .row button { flex: 1; }
+  .sub-h { font-size: .95rem; margin: 18px 0 8px; }
+  /* 「作った」ときに使った材料を減らすシート */
+  .sheet-backdrop {
+    position: fixed; inset: 0; z-index: 30; background: rgba(30, 20, 10, .45);
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .sheet-backdrop[hidden] { display: none; }
+  .sheet {
+    background: var(--surface); width: 100%; max-width: 600px; max-height: 85vh; overflow-y: auto;
+    border-radius: 20px 20px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+  }
+  ul.cook-list { list-style: none; margin: 0 0 8px; padding: 0; }
+  ul.cook-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  ul.cook-list .cook-name { flex: 1; min-width: 7em; font-weight: 700; }
+  ul.cook-list .cook-now { display: block; font-size: .8rem; font-weight: 400; color: var(--muted); }
+  ul.cook-list .use-count { display: inline-flex; align-items: center; gap: 4px; font-size: .85rem; }
   .notice a { color: var(--accent); font-weight: 700; }
   .ok-msg { color: var(--accent); font-weight: 700; font-size: .9rem; }
   .card-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
@@ -316,11 +332,11 @@
       <h2 id="share-h">🔁 在庫を共有</h2>
       <p class="notice" style="margin:0 0 12px">在庫をCSVファイルで書き出して送ったり、受け取ったCSVを読み込んだりできます。</p>
       <div class="share-actions">
-        <button type="button" class="secondary" id="export-btn">CSVで書き出す</button>
-        <button type="button" class="secondary" id="import-btn">CSVを読み込む</button>
+        <button type="button" class="secondary" id="stock-export-btn">CSVで書き出す</button>
+        <button type="button" class="secondary" id="stock-import-btn">CSVを読み込む</button>
       </div>
-      <input type="file" id="import-file" accept=".csv,text/csv,text/comma-separated-values" hidden>
-      <div class="import-box" id="import-box" hidden></div>
+      <input type="file" id="stock-import-file" accept=".csv,text/csv,text/comma-separated-values" hidden>
+      <div class="import-box" id="stock-import-box" hidden></div>
     </section>
   </div>
 
@@ -401,6 +417,13 @@
         </div>
       </form>
       <ul class="my-list" id="my-list"></ul>
+      <h3 class="sub-h">🔁 マイ献立を共有</h3>
+      <div class="share-actions">
+        <button type="button" class="secondary" id="my-export-btn">CSVで書き出す</button>
+        <button type="button" class="secondary" id="my-import-btn">CSVを読み込む</button>
+      </div>
+      <input type="file" id="my-import-file" accept=".csv,text/csv,text/comma-separated-values" hidden>
+      <div class="import-box" id="my-import-box" hidden></div>
     </section>
   </div>
 
@@ -423,6 +446,30 @@
         <button type="button" class="primary" id="day-add-btn">この日に登録</button>
       </div>
     </section>
+    <section aria-labelledby="cal-share-h">
+      <h2 id="cal-share-h">🔁 カレンダーを共有</h2>
+      <p class="notice" style="margin:0 0 12px">作った献立の記録をCSVファイルで書き出して送ったり、受け取ったCSVを読み込んだりできます。</p>
+      <div class="share-actions">
+        <button type="button" class="secondary" id="cal-export-btn">CSVで書き出す</button>
+        <button type="button" class="secondary" id="cal-import-btn">CSVを読み込む</button>
+      </div>
+      <input type="file" id="cal-import-file" accept=".csv,text/csv,text/comma-separated-values" hidden>
+      <div class="import-box" id="cal-import-box" hidden></div>
+    </section>
+  </div>
+
+  <div class="sheet-backdrop" id="cook-sheet" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="cook-h">
+      <h2 id="cook-h"></h2>
+      <p class="notice" style="margin:0 0 8px">使った材料の在庫を減らせます。減らさないものは「そのまま」にしてください。</p>
+      <ul class="cook-list" id="cook-list"></ul>
+      <p class="notice" id="cook-missing" style="margin:0 0 8px"></p>
+      <div class="card-actions">
+        <button type="button" class="primary" id="cook-apply">在庫を減らして記録</button>
+        <button type="button" class="secondary" id="cook-skip">記録だけ</button>
+        <button type="button" class="link" id="cook-cancel">やめる</button>
+      </div>
+    </div>
   </div>
 </main>
 
@@ -924,15 +971,13 @@
     }
   }
 
-  $('export-btn').addEventListener('click', async () => {
-    if (!stock.length) { alert('在庫がまだありません'); return; }
-    const filename = `zaiko_${toYmd(today())}.csv`; // 日本語のファイル名は端末によって落ちるので英字にする
-    const blob = new Blob([stockToCsv()], { type: 'text/csv' });
+  async function shareOrDownload(text, filename, title) {
+    const blob = new Blob([text], { type: 'text/csv' });
     // スマホでは共有メニュー（LINE など）を開く。使えなければファイルとして保存する
     const file = typeof File === 'function' ? new File([blob], filename, { type: 'text/csv' }) : null;
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: '冷蔵庫の在庫' });
+        await navigator.share({ files: [file], title });
         return;
       } catch (e) {
         if (e.name === 'AbortError') return;
@@ -945,43 +990,146 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  // 1行目の見出しで列を探す表。必須の列がなければエラー
+  function csvTable(text, required) {
+    const rows = parseCsv(text.replace(/^﻿/, ''));
+    const head = (rows[0] || []).map((h) => h.trim());
+    for (const name of required) {
+      if (!head.includes(name)) throw new Error(`1行目に「${name}」の列が見つかりません`);
+    }
+    const get = (r, name) => {
+      const i = head.indexOf(name);
+      return i >= 0 ? (r[i] || '').trim().replace(/^'(?=[=+\-@])/, '') : '';
+    };
+    return { rows: rows.slice(1), get };
+  }
+  const csvLine = (cells) => cells.map(csvCell).join(',');
+  const csvFile = (header, rows) => '﻿' + [header, ...rows].map(csvLine).join('\r\n') + '\r\n';
+  const splitList = (v) => v.split(/[、,，・/]/).map((x) => x.trim()).filter(Boolean);
+
+  // 書き出し・読み込み（置き換える／追加する）のボタン一式をつなぐ
+  function setupCsvShare(cfg) {
+    const id = (x) => $(`${cfg.prefix}-${x}`);
+    let pending = null;
+    const closeBox = () => { pending = null; id('import-box').hidden = true; id('import-box').innerHTML = ''; };
+    id('export-btn').addEventListener('click', () => {
+      if (!cfg.count()) { alert(`${cfg.label}がまだありません`); return; }
+      shareOrDownload(cfg.toCsv(), `${cfg.file}_${toYmd(today())}.csv`, cfg.label); // ファイル名は英字（日本語は端末によって落ちる）
+    });
+    id('import-btn').addEventListener('click', () => id('import-file').click());
+    id('import-file').addEventListener('change', async () => {
+      const file = id('import-file').files[0];
+      id('import-file').value = '';
+      if (!file) return;
+      const box = id('import-box');
+      box.hidden = false;
+      try {
+        const { items, skipped } = cfg.fromCsv(await readCsvFile(file));
+        if (!items.length) throw new Error(`読み込める${cfg.label}がありませんでした`);
+        pending = items;
+        box.innerHTML = `
+          <p>「${escapeHtml(file.name)}」から <strong>${items.length}件</strong> 読み込みました。${skipped ? `（読めない ${skipped}行は読み飛ばしました）` : ''}<br>今の${cfg.label}（${cfg.count()}件）にどう反映しますか？</p>
+          <div class="row">
+            <button type="button" class="primary" data-import="replace">置き換える</button>
+            <button type="button" class="secondary" data-import="add">追加する</button>
+          </div>
+          ${cfg.addNote ? `<p class="notice" style="margin:6px 0 0">${cfg.addNote}</p>` : ''}
+          <button type="button" class="link" data-import="cancel" style="margin-top:6px">やめる</button>`;
+      } catch (e) {
+        pending = null;
+        box.innerHTML = `<p class="error">CSVを読み込めませんでした：${escapeHtml(e.message)}</p>
+          <button type="button" class="link" data-import="cancel">閉じる</button>`;
+      }
+    });
+    id('import-box').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-import]');
+      if (!btn) return;
+      if (btn.dataset.import !== 'cancel' && pending) cfg.apply(btn.dataset.import, pending);
+      closeBox();
+    });
+  }
+
+  // 在庫
+  setupCsvShare({
+    prefix: 'stock', label: '在庫', file: 'zaiko',
+    count: () => stock.length,
+    toCsv: stockToCsv,
+    fromCsv: csvToStock,
+    apply: (mode, items) => {
+      stock = mode === 'replace' ? items : stock.concat(items);
+      saveStock();
+      renderStock();
+    },
   });
 
-  let pendingImport = null;
-  $('import-btn').addEventListener('click', () => $('import-file').click());
-  $('import-file').addEventListener('change', async () => {
-    const file = $('import-file').files[0];
-    $('import-file').value = '';
-    if (!file) return;
-    const box = $('import-box');
-    box.hidden = false;
-    try {
-      const { items, skipped } = csvToStock(await readCsvFile(file));
-      if (!items.length) throw new Error('読み込める在庫がありませんでした');
-      pendingImport = items;
-      box.innerHTML = `
-        <p>「${escapeHtml(file.name)}」から <strong>${items.length}件</strong> 読み込みました。${skipped ? `（名前がない ${skipped}行は読み飛ばしました）` : ''}<br>今の在庫（${stock.length}件）にどう反映しますか？</p>
-        <div class="row">
-          <button type="button" class="primary" data-import="replace">置き換える</button>
-          <button type="button" class="secondary" data-import="add">追加する</button>
-        </div>
-        <button type="button" class="link" data-import="cancel" style="margin-top:6px">やめる</button>`;
-    } catch (e) {
-      pendingImport = null;
-      box.innerHTML = `<p class="error">CSVを読み込めませんでした：${escapeHtml(e.message)}</p>
-        <button type="button" class="link" data-import="cancel">閉じる</button>`;
-    }
+  // マイ献立: 料理名, タイプ, 調理時間, 材料（、区切り）, 調味料（、区切り）, URL
+  const TYPES = ['和食', '洋食', '中華', 'エスニック', 'その他'];
+  setupCsvShare({
+    prefix: 'my', label: 'マイ献立', file: 'kondate',
+    addNote: '「追加する」では、同じ料理名の献立は読み込んだ内容で上書きします',
+    count: () => myRecipes.length,
+    toCsv: () => csvFile(['料理名', 'タイプ', '調理時間', '材料', '調味料', 'URL'],
+      myRecipes.map((r) => [r.name, r.type, r.time, r.ingredients.join('、'), (r.seasonings || []).join('、'), r.url || ''])),
+    fromCsv: (text) => {
+      const t = csvTable(text, ['料理名', '材料']);
+      const items = [];
+      let skipped = 0;
+      for (const r of t.rows) {
+        const name = t.get(r, '料理名').slice(0, 40);
+        const ingredients = splitList(t.get(r, '材料'));
+        if (!name || !ingredients.length) { skipped++; continue; }
+        const time = Number(t.get(r, '調理時間'));
+        const url = t.get(r, 'URL');
+        items.push({
+          id: 'my-' + newId(), name, ingredients, seasonings: splitList(t.get(r, '調味料')),
+          time: Number.isFinite(time) && time > 0 ? Math.round(time) : 30,
+          type: TYPES.includes(t.get(r, 'タイプ')) ? t.get(r, 'タイプ') : 'その他',
+          url: /^https?:\/\//i.test(url) ? url : '',
+        });
+      }
+      return { items, skipped };
+    },
+    apply: (mode, items) => {
+      if (mode === 'replace') myRecipes = items;
+      else {
+        const names = new Set(items.map((r) => r.name));
+        myRecipes = [...items, ...myRecipes.filter((r) => !names.has(r.name))];
+      }
+      saveJson(MY_RECIPES_KEY, myRecipes);
+      renderMyList();
+    },
   });
-  $('import-box').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-import]');
-    if (!btn) return;
-    const mode = btn.dataset.import;
-    if (mode === 'replace' && pendingImport) stock = pendingImport;
-    if (mode === 'add' && pendingImport) stock = stock.concat(pendingImport);
-    if (mode !== 'cancel') { saveStock(); renderStock(); }
-    pendingImport = null;
-    $('import-box').hidden = true;
-    $('import-box').innerHTML = '';
+
+  // カレンダー: 日付, 献立（1行に1品）
+  setupCsvShare({
+    prefix: 'cal', label: 'カレンダーの記録', file: 'calendar',
+    addNote: '「追加する」では、同じ日の同じ献立は重ねて登録しません',
+    count: () => Object.values(meals).reduce((n, list) => n + list.length, 0),
+    toCsv: () => csvFile(['日付', '献立'],
+      Object.keys(meals).sort().flatMap((d) => meals[d].map((x) => [d, x.name]))),
+    fromCsv: (text) => {
+      const t = csvTable(text, ['日付', '献立']);
+      const items = [];
+      let skipped = 0;
+      for (const r of t.rows) {
+        const date = csvDate(t.get(r, '日付'));
+        const name = t.get(r, '献立').slice(0, 40);
+        if (!date || !name) { skipped++; continue; }
+        items.push({ date, name });
+      }
+      return { items, skipped };
+    },
+    apply: (mode, items) => {
+      if (mode === 'replace') meals = {};
+      for (const { date, name } of items) {
+        const list = (meals[date] = meals[date] || []);
+        if (mode === 'add' && list.some((x) => x.name === name)) continue;
+        list.push({ id: newId(), name });
+      }
+      saveJson(MEALS_KEY, meals);
+      renderCalendar();
+    },
   });
 
   // ---------- レシピ ----------
@@ -1088,13 +1236,88 @@
   }
 
   $('suggest-btn').addEventListener('click', suggest);
-  // 提案カードの「今日作った」→ 今日のカレンダーに登録
+  // 提案カードの「今日作った」→ 使った材料を減らして今日のカレンダーに登録
   $('results').addEventListener('click', (e) => {
     const btn = e.target.closest('.cook-btn');
     if (!btn) return;
-    addMeal(toYmd(today()), btn.dataset.name);
-    btn.outerHTML = '<span class="ok-msg">✓ 今日のカレンダーに登録しました</span>';
+    openCookSheet(toYmd(today()), btn.dataset.name, (reduced) => {
+      btn.outerHTML = `<span class="ok-msg">✓ 今日のカレンダーに登録しました${reduced ? '（在庫も減らしました）' : ''}</span>`;
+    });
   });
+
+  // ---------- 作ったときに使った材料の在庫を減らす ----------
+  const cook = { date: null, name: '', rows: [], done: null };
+  // 同じ食材が複数あるときは、期限の近いものから使う
+  function stockFor(name) {
+    return stock
+      .filter((s) => s.name === name && !s.product && !isEmptyCount(s.amount))
+      .sort((a, b) => (a.expiry || '9999').localeCompare(b.expiry || '9999'))[0];
+  }
+  function openCookSheet(date, name, done) {
+    const recipe = allRecipes().find((r) => r.name === name);
+    const rows = recipe ? recipe.ingredients.map((ing) => ({ ing, item: stockFor(ing) })) : [];
+    const usable = rows.filter((r) => r.item);
+    if (!usable.length) { // 在庫に使った材料がなければ、そのまま記録する
+      addMeal(date, name);
+      done(false);
+      return;
+    }
+    Object.assign(cook, { date, name, rows: usable, done });
+    const [, mo, d] = date.split('-').map(Number);
+    $('cook-h').textContent = `🍳 ${mo}月${d}日に「${name}」を作った`;
+    $('cook-list').innerHTML = usable.map(({ ing, item }, i) => {
+      const a = item.amount;
+      const now = a ? amountLabel(a) : '残りの量は未入力';
+      const control = a && a.type === 'count'
+        ? `<span class="use-count amount">使った数
+            <button type="button" class="step" data-step="-1" aria-label="1つ減らす">−</button>
+            <input type="number" class="amt-n" min="0" step="1" inputmode="numeric" value="1" aria-label="${escapeHtml(ing)}を使った数">
+            <button type="button" class="step" data-step="1" aria-label="1つ増やす">＋</button>${escapeHtml(a.unit)}</span>`
+        : `<select class="use-level" aria-label="${escapeHtml(ing)}の残り">
+            <option value="keep">そのまま</option>
+            <option value="half">半分くらいになった</option>
+            <option value="low">少しになった</option>
+            <option value="gone">使い切った（在庫から消す）</option>
+          </select>`;
+      return `<li data-row="${i}"><span class="cook-name">${escapeHtml(ing)}<span class="cook-now">${escapeHtml(now)}</span></span>${control}</li>`;
+    }).join('');
+    const missing = rows.filter((r) => !r.item).map((r) => r.ing);
+    $('cook-missing').textContent = missing.length ? `在庫にない材料：${missing.join('、')}` : '';
+    $('cook-sheet').hidden = false;
+  }
+  function closeCookSheet() {
+    $('cook-sheet').hidden = true;
+    cook.done = null;
+  }
+  function finishCook(reduce) {
+    if (reduce) {
+      $('cook-list').querySelectorAll('li[data-row]').forEach((li) => {
+        const { item } = cook.rows[Number(li.dataset.row)];
+        const countInput = li.querySelector('.amt-n');
+        if (countInput) {
+          const used = Math.max(0, Math.round(Number(countInput.value)) || 0);
+          item.amount = { ...item.amount, n: Math.max(0, item.amount.n - used) };
+          if (item.amount.n === 0) stock = stock.filter((s) => s !== item); // 使い切ったら在庫から消す
+          return;
+        }
+        const level = li.querySelector('.use-level').value;
+        if (level === 'gone') stock = stock.filter((s) => s !== item);
+        else if (level !== 'keep') item.amount = { type: 'level', level };
+      });
+      saveStock();
+      renderStock();
+    }
+    addMeal(cook.date, cook.name);
+    const done = cook.done;
+    closeCookSheet();
+    if (done) done(reduce);
+  }
+  $('cook-list').addEventListener('click', handleAmountUi);
+  $('cook-apply').addEventListener('click', () => finishCook(true));
+  $('cook-skip').addEventListener('click', () => finishCook(false));
+  $('cook-cancel').addEventListener('click', closeCookSheet);
+  $('cook-sheet').addEventListener('click', (e) => { if (e.target === $('cook-sheet')) closeCookSheet(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('cook-sheet').hidden) closeCookSheet(); });
 
   // ---------- マイ献立 ----------
   const rf = { editingId: null, ings: [], seas: new Set(), cat: null };
@@ -1292,10 +1515,12 @@
     renderCalendar();
   });
   $('day-add-btn').addEventListener('click', () => {
-    const name = ($('day-free').value.trim() || $('day-select').value).slice(0, 40);
-    if (!name) { alert('献立を選ぶか、料理名を入力してください'); return; }
+    const free = $('day-free').value.trim().slice(0, 40);
+    const picked = $('day-select').value;
+    if (!free && !picked) { alert('献立を選ぶか、料理名を入力してください'); return; }
     $('day-free').value = '';
-    addMeal(cal.selected, name);
+    if (free) addMeal(cal.selected, free);
+    else openCookSheet(cal.selected, picked, () => {}); // 献立リストから選んだときは使った材料の在庫も減らせる
   });
   $('day-meals').addEventListener('click', (e) => {
     const li = e.target.closest('li[data-id]');
