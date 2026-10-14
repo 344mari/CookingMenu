@@ -147,6 +147,18 @@
   .fld { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .fld.full { grid-column: 1 / -1; }
   .flabel { font-size: .8rem; color: var(--muted); }
+  .flabel-row { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; min-height: 1.6em; }
+  button.mini {
+    font: inherit; font-size: .75rem; color: var(--accent); background: none;
+    border: none; padding: 0 2px; text-decoration: underline; cursor: pointer; white-space: nowrap;
+  }
+  /* 日付が空のときは欄に「不明」「なし」と表示する（タップすると日付を選べる） */
+  .date-field { position: relative; display: block; min-width: 0; }
+  .date-field.empty input { color: transparent; }
+  .date-field.empty::after {
+    content: attr(data-empty); position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); pointer-events: none;
+  }
   .amount { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .amount select { min-height: 40px; padding: 6px 8px; }
   .amt-count { display: inline-flex; gap: 4px; align-items: center; }
@@ -443,13 +455,36 @@
     }
     return e.type === 'input' || e.type === 'change';
   }
+  // 日付欄。空なら「不明」「なし」と表示し、日付が入っていれば「不明にする」等で空に戻せる
+  function dateFieldHtml(cls, value, title, emptyText, label) {
+    return `<div class="fld">
+            <span class="flabel-row"><span class="flabel">${title}</span>
+              <button type="button" class="mini clear-date"${value ? '' : ' hidden'}>${emptyText}にする</button></span>
+            <span class="date-field${value ? '' : ' empty'}" data-empty="${emptyText}">
+              <input type="date" class="${cls}" value="${escapeHtml(value || '')}" aria-label="${escapeHtml(label)}"></span>
+          </div>`;
+  }
+  function syncDateField(fld) {
+    const input = fld.querySelector('input[type="date"]');
+    fld.querySelector('.date-field').classList.toggle('empty', !input.value);
+    fld.querySelector('.clear-date').hidden = !input.value;
+  }
+  // 「不明にする」「なしにする」は日付を空にして、入力があったことを知らせる（登録中の一覧が値を拾う）
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.clear-date');
+    if (!btn) return;
+    const input = btn.closest('.fld').querySelector('input[type="date"]');
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  ['input', 'change'].forEach((t) => document.addEventListener(t, (e) => {
+    if (e.target.matches('.date-field input')) syncDateField(e.target.closest('.fld'));
+  }));
   // 購入日・賞味期限・残りの量の入力欄（登録時と在庫の編集で共通）
   function fieldsHtml(item, label) {
     return `<div class="fields">
-          <label class="fld"><span class="flabel">購入日</span>
-            <input type="date" class="in-bought" value="${escapeHtml(item.bought || '')}" aria-label="${escapeHtml(label)}の購入日"></label>
-          <label class="fld"><span class="flabel">賞味期限</span>
-            <input type="date" class="in-expiry" value="${escapeHtml(item.expiry || '')}" aria-label="${escapeHtml(label)}の賞味期限"></label>
+          ${dateFieldHtml('in-bought', item.bought, '購入日', '不明', `${label}の購入日`)}
+          ${dateFieldHtml('in-expiry', item.expiry, '賞味期限', 'なし', `${label}の賞味期限`)}
           <div class="fld full"><span class="flabel">残り</span>${amountHtml(item.amount, label)}</div>
         </div>`;
   }
@@ -594,7 +629,7 @@
   function expiryCell(s) {
     if (s.expiry) return `${isUrgent(s.days) ? '⏰ ' : ''}${escapeHtml(expiryLabel(s.days))}<br>${escapeHtml(shortDate(s.expiry))}`;
     if (s.bought) return `${escapeHtml(boughtLabel(daysSince(s.bought)))}<br>${escapeHtml(shortDate(s.bought))}購入`;
-    return escapeHtml(expiryLabel(null));
+    return `${escapeHtml(expiryLabel(null))}<br>購入日不明`;
   }
   function renderStock() {
     const list = sortedStock();
