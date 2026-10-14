@@ -162,9 +162,10 @@
   }
   .amount { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .amount select { min-height: 40px; padding: 6px 8px; }
-  .amt-count { display: inline-flex; gap: 4px; align-items: center; }
+  .amt-count { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; max-width: 100%; }
   .amt-count[hidden] { display: none; }
-  .amt-n { width: 3.2em; min-height: 40px; padding: 6px 4px; text-align: center; }
+  .amt-n { width: 4.2em; min-height: 40px; padding: 6px 4px; text-align: center; -moz-appearance: textfield; appearance: textfield; }
+  .amt-n::-webkit-inner-spin-button, .amt-n::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   .step {
     font: inherit; font-size: 1.1rem; width: 40px; height: 40px; cursor: pointer;
     background: var(--chip); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
@@ -268,6 +269,11 @@
   .picked-chips .chip::after { content: " ×"; opacity: .7; }
   .free-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 8px; }
   .free-add input { min-width: 0; }
+  ul.use-list { list-style: none; margin: 0; padding: 0; }
+  ul.use-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 0; border-top: 1px solid var(--border); }
+  ul.use-list .use-name { flex: 1; min-width: 6em; font-weight: 700; overflow-wrap: anywhere; }
+  ul.use-list .use-name small { display: block; font-weight: 400; font-size: .75rem; color: var(--muted); }
+  .recipe-use { display: block; font-size: .8rem; font-weight: 400; color: var(--accent); }
   .form-error { color: var(--danger); font-size: .9rem; margin: 10px 0 0; }
   ul.my-list { list-style: none; margin: 12px 0 0; padding: 0; }
   ul.my-list li { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); }
@@ -409,6 +415,8 @@
           <input type="text" id="rf-seas-extra" maxlength="20" placeholder="ほかの調味料" aria-label="ほかの調味料" autocomplete="off">
           <button type="button" class="secondary" id="rf-seas-add">追加</button>
         </div>
+        <span class="field" style="display:block;font-size:.85rem;color:var(--muted);margin:14px 0 4px">⚖️ 使う量（任意。作ったときにこの分を在庫から減らします）</span>
+        <ul class="use-list" id="rf-amounts"></ul>
         <label class="field" for="rf-url">🔗 レシピのURL（任意）</label>
         <input type="url" id="rf-url" placeholder="https://..." autocomplete="off">
         <p class="form-error" id="rf-error" hidden></p>
@@ -484,6 +492,10 @@
 (() => {
   'use strict';
 
+  // よく使う調味料（食材リストの「調味料」と、マイ献立の調味料の候補に使う）
+  const SEASONINGS = ['醤油', 'みりん', '酒', '砂糖', '塩', 'こしょう', '味噌', '酢', 'ごま油', 'サラダ油', 'オリーブオイル',
+    'マヨネーズ', 'ケチャップ', 'ソース', 'ポン酢', 'めんつゆ', 'だし', 'コンソメ', '鶏がらスープの素', 'オイスターソース',
+    '豆板醤', 'カレー粉', 'にんにく', 'しょうが'];
   // よく使う食材リスト。recipes.json の ingredients はこの表記に合わせる
   const CATALOG = {
     '野菜・きのこ': ['玉ねぎ', 'にんじん', 'じゃがいも', 'キャベツ', '白菜', '大根', 'ねぎ', 'ピーマン', 'なす', 'トマト', 'きゅうり', 'ほうれん草', 'ブロッコリー', 'もやし', 'レタス', 'かぼちゃ', 'しめじ', 'えのき', 'ごぼう', 'にら'],
@@ -492,6 +504,7 @@
     '卵・乳製品・大豆': ['卵', '牛乳', 'チーズ', 'バター', '豆腐', '油揚げ', '納豆'],
     'フルーツ': ['りんご', 'バナナ', 'みかん', 'オレンジ', 'グレープフルーツ', 'レモン', 'いちご', 'ぶどう', 'キウイ', 'もも', 'なし', '柿', 'パイナップル', 'メロン', 'すいか', 'ブルーベリー', 'アボカド'],
     '主食・その他': ['ごはん', 'うどん', 'パスタ', '中華麺', 'カレールウ', 'キムチ', 'こんにゃく'],
+    '調味料': SEASONINGS,
   };
   // 漢字を含む食材のよみ。ひらがなで入力しても検索で見つかるようにする
   const READINGS = {
@@ -500,18 +513,17 @@
     '鮭': 'さけ しゃけ', 'ツナ缶': 'つなかん',
     '卵': 'たまご', '牛乳': 'ぎゅうにゅう', '豆腐': 'とうふ', '油揚げ': 'あぶらあげ', '納豆': 'なっとう',
     '中華麺': 'ちゅうかめん', '柿': 'かき',
+    '醤油': 'しょうゆ', '酒': 'さけ', '砂糖': 'さとう', '塩': 'しお', '味噌': 'みそ', '酢': 'す', 'ごま油': 'ごまあぶら',
+    'サラダ油': 'さらだあぶら', 'ポン酢': 'ぽんず', '鶏がらスープの素': 'とりがらすーぷのもと', '豆板醤': 'とうばんじゃん', 'カレー粉': 'かれーこ',
   };
   // 見た目用の絵文字（カテゴリと料理のタイプ）
   const CAT_EMOJI = {
-    '野菜・きのこ': '🥬', '肉': '🍖', '魚介': '🐟', '卵・乳製品・大豆': '🥚', 'フルーツ': '🍎', '主食・その他': '🍚',
+    '野菜・きのこ': '🥬', '肉': '🍖', '魚介': '🐟', '卵・乳製品・大豆': '🥚', 'フルーツ': '🍎', '主食・その他': '🍚', '調味料': '🧂',
   };
   const TYPE_EMOJI = { '和食': '🍙', '洋食': '🍝', '中華': '🥟', 'エスニック': '🌶️' };
   const STORAGE_KEY = 'cookingMenu.stock';
   const MY_RECIPES_KEY = 'cookingMenu.myRecipes'; // 自分で登録した献立
   const MEALS_KEY = 'cookingMenu.meals'; // カレンダー: { 'YYYY-MM-DD': [{ id, name }] }
-  const SEASONINGS = ['醤油', 'みりん', '酒', '砂糖', '塩', 'こしょう', '味噌', '酢', 'ごま油', 'サラダ油', 'オリーブオイル',
-    'マヨネーズ', 'ケチャップ', 'ソース', 'ポン酢', 'めんつゆ', 'だし', 'コンソメ', '鶏がらスープの素', 'オイスターソース',
-    '豆板醤', 'カレー粉', 'にんにく', 'しょうが'];
   const URGENT_DAYS = 3;
   const RESULT_COUNT = 3;
 
@@ -603,6 +615,10 @@
   // 数えられるものは「数＋単位」、数えにくいものは「たっぷり／半分くらい／少し」で持つ。未入力は null
   //   { type: 'count', n: 3, unit: '個' } / { type: 'level', level: 'half' }
   const UNITS = ['個', '本', '袋', 'パック', '枚', '切れ', '玉', 'g'];
+  // マイ献立で使う量の単位（大さじ・小さじ・カップは数字の前に書く）
+  const RECIPE_UNITS = [...UNITS, 'ml', '大さじ', '小さじ', 'カップ'];
+  const PREFIX_UNITS = ['大さじ', '小さじ', 'カップ'];
+  const USE_LEVELS = { low: '少し', half: '半分くらい', all: '全部' };
   const LEVELS = { full: 'たっぷり', half: '半分くらい', low: '少し' };
   function amountLabel(a) {
     if (!a) return '';
@@ -682,6 +698,54 @@
           <div class="fld full"><span class="flabel">残り</span>${amountHtml(item.amount, label)}</div>
         </div>`;
   }
+  // ---------- マイ献立の「使う量」 ----------
+  //   { type: 'count', n: 2, unit: '個' } / { type: 'level', level: 'low' | 'half' | 'all' }。指定なしは null
+  function usageLabel(u) {
+    if (!u) return '';
+    if (u.type === 'level') return USE_LEVELS[u.level] || '';
+    return PREFIX_UNITS.includes(u.unit) ? `${u.unit}${u.n}` : `${u.n}${u.unit}`;
+  }
+  function usageHtml(u, label) {
+    const type = !u ? '' : u.type === 'count' ? 'count' : u.level;
+    const n = u && u.type === 'count' ? u.n : 1;
+    const unit = u && u.type === 'count' ? u.unit : RECIPE_UNITS[0];
+    const opt = (v, text) => `<option value="${v}"${v === type ? ' selected' : ''}>${text}</option>`;
+    return `<span class="amount">
+        <select class="amt-type" aria-label="${escapeHtml(label)}を使う量">
+          ${opt('', '指定しない')}${opt('count', '数で入力')}${Object.entries(USE_LEVELS).map(([k, v]) => opt(k, v)).join('')}
+        </select>
+        <span class="amt-count"${type === 'count' ? '' : ' hidden'}>
+          <button type="button" class="step" data-step="-1" aria-label="減らす">−</button>
+          <input type="number" class="amt-n" min="0" step="any" inputmode="decimal" value="${escapeHtml(n)}" aria-label="${escapeHtml(label)}の量">
+          <button type="button" class="step" data-step="1" aria-label="増やす">＋</button>
+          <select class="amt-unit" aria-label="単位">${RECIPE_UNITS.map((x) => `<option${x === unit ? ' selected' : ''}>${x}</option>`).join('')}</select>
+        </span>
+      </span>`;
+  }
+  function readUsage(root) {
+    const type = root.querySelector('.amt-type').value;
+    if (!type) return null;
+    if (type !== 'count') return { type: 'level', level: type };
+    const n = Math.max(0, Math.round((Number(root.querySelector('.amt-n').value) || 0) * 100) / 100);
+    return n ? { type: 'count', n, unit: root.querySelector('.amt-unit').value } : null;
+  }
+  // 「鶏もも肉 300g」「醤油 大さじ2」「大根 半分くらい」→ 名前と使う量
+  function parseUsageItem(text) {
+    const t = text.trim();
+    const units = RECIPE_UNITS.map((u) => u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    let m = new RegExp(`^(.+?)\\s+(${PREFIX_UNITS.join('|')})(\\d+(?:\\.\\d+)?)$`).exec(t);
+    if (m) return { name: m[1], usage: { type: 'count', n: Number(m[3]), unit: m[2] } };
+    m = new RegExp(`^(.+?)\\s+(\\d+(?:\\.\\d+)?)(${units})$`).exec(t);
+    if (m) return { name: m[1], usage: { type: 'count', n: Number(m[2]), unit: m[3] } };
+    const lv = Object.entries(USE_LEVELS).find(([, v]) => t.endsWith(' ' + v) || t.endsWith('　' + v));
+    if (lv) return { name: t.slice(0, -(lv[1].length + 1)).trim(), usage: { type: 'level', level: lv[0] } };
+    return { name: t, usage: null };
+  }
+  const withUsage = (name, amounts) => {
+    const u = amounts && amounts[name];
+    return u ? `${name} ${usageLabel(u)}` : name;
+  };
+
   function isEmptyCount(a) {
     return !!a && a.type === 'count' && a.n === 0;
   }
@@ -1007,7 +1071,7 @@
   }
   const csvLine = (cells) => cells.map(csvCell).join(',');
   const csvFile = (header, rows) => '﻿' + [header, ...rows].map(csvLine).join('\r\n') + '\r\n';
-  const splitList = (v) => v.split(/[、,，・/]/).map((x) => x.trim()).filter(Boolean);
+  const splitList = (v) => v.split(/[、,，/]/).map((x) => x.trim()).filter(Boolean);
 
   // 書き出し・読み込み（置き換える／追加する）のボタン一式をつなぐ
   function setupCsvShare(cfg) {
@@ -1071,19 +1135,27 @@
     addNote: '「追加する」では、同じ料理名の献立は読み込んだ内容で上書きします',
     count: () => myRecipes.length,
     toCsv: () => csvFile(['料理名', 'タイプ', '調理時間', '材料', '調味料', 'URL'],
-      myRecipes.map((r) => [r.name, r.type, r.time, r.ingredients.join('、'), (r.seasonings || []).join('、'), r.url || ''])),
+      myRecipes.map((r) => [r.name, r.type, r.time, r.ingredients.map((n) => withUsage(n, r.amounts)).join('、'),
+        (r.seasonings || []).map((n) => withUsage(n, r.amounts)).join('、'), r.url || ''])),
     fromCsv: (text) => {
       const t = csvTable(text, ['料理名', '材料']);
       const items = [];
       let skipped = 0;
       for (const r of t.rows) {
         const name = t.get(r, '料理名').slice(0, 40);
-        const ingredients = splitList(t.get(r, '材料'));
+        // 「鶏もも肉 300g」のように量が書いてあれば読み取る
+        const amounts = {};
+        const readItems = (v) => splitList(v).map(parseUsageItem).filter((x) => x.name).map((x) => {
+          if (x.usage) amounts[x.name] = x.usage;
+          return x.name;
+        });
+        const ingredients = readItems(t.get(r, '材料'));
+        const seasonings = readItems(t.get(r, '調味料'));
         if (!name || !ingredients.length) { skipped++; continue; }
         const time = Number(t.get(r, '調理時間'));
         const url = t.get(r, 'URL');
         items.push({
-          id: 'my-' + newId(), name, ingredients, seasonings: splitList(t.get(r, '調味料')),
+          id: 'my-' + newId(), name, ingredients, seasonings, amounts,
           time: Number.isFinite(time) && time > 0 ? Math.round(time) : 30,
           type: TYPES.includes(t.get(r, 'タイプ')) ? t.get(r, 'タイプ') : 'その他',
           url: /^https?:\/\//i.test(url) ? url : '',
@@ -1225,10 +1297,10 @@
         <p class="meta">⏱️ ${escapeHtml(r.time)}分 ・ ${TYPE_EMOJI[r.type] || '🍴'} ${escapeHtml(r.type || '')} ・ 在庫で${pct}%揃う${pct === 100 ? ' 🎉' : ''}</p>
         <div class="bar"><span style="width:${pct}%"></span></div>
         <div class="label">✅ 使える在庫</div>
-        <div class="tags">${x.have.map((h) => `<span class="tag${isUrgent(h.days) ? ' urgent' : ''}">${escapeHtml(h.name)}${isUrgent(h.days) ? `（${escapeHtml(expiryLabel(h.days))}）` : ''}</span>`).join('')}</div>
+        <div class="tags">${x.have.map((h) => `<span class="tag${isUrgent(h.days) ? ' urgent' : ''}">${escapeHtml(withUsage(h.name, r.amounts))}${isUrgent(h.days) ? `（${escapeHtml(expiryLabel(h.days))}）` : ''}</span>`).join('')}</div>
         <div class="label">🛒 足りない食材</div>
-        <div class="tags">${x.missing.length ? x.missing.map((m) => `<span class="tag missing">${escapeHtml(m)}</span>`).join('') : '<span class="tag">なし（全部揃っています 🎉）</span>'}</div>
-        ${seas.length ? `<p class="seasonings">🧂 調味料：${seas.map(escapeHtml).join('、')}</p>` : ''}
+        <div class="tags">${x.missing.length ? x.missing.map((m) => `<span class="tag missing">${escapeHtml(withUsage(m, r.amounts))}</span>`).join('') : '<span class="tag">なし（全部揃っています 🎉）</span>'}</div>
+        ${seas.length ? `<p class="seasonings">🧂 調味料：${seas.map((n) => escapeHtml(withUsage(n, r.amounts))).join('、')}</p>` : ''}
         <div class="card-actions">
           ${url ? `<a class="recipe-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">📖 レシピを見る ↗</a>` : ''}
           <button type="button" class="secondary cook-btn" data-name="${escapeHtml(r.name)}">📅 今日作った</button>
@@ -1254,10 +1326,33 @@
       .filter((s) => s.name === name && !s.product && !isEmptyCount(s.amount))
       .sort((a, b) => (a.expiry || '9999').localeCompare(b.expiry || '9999'))[0];
   }
+  // 数で管理している在庫を、レシピの使う量からいくつ減らすか（単位が違えば 0 にして手で直してもらう）
+  function defaultUsedCount(a, usage) {
+    if (!usage) return 1;
+    if (usage.type === 'count') return usage.unit === a.unit ? usage.n : 0;
+    if (usage.level === 'all') return a.n;
+    if (usage.level === 'half') return Math.ceil(a.n / 2);
+    return Math.min(1, a.n);
+  }
+  // 「たっぷり／半分くらい／少し」や未入力の在庫が、レシピの分を使ったあとどうなるか
+  function defaultLevelAfter(a, usage) {
+    if (!usage) return 'keep';
+    const now = a && a.type === 'level' ? { full: 1, half: 0.5, low: 0.2 }[a.level] : 1;
+    const use = usage.type === 'level' ? { low: 0.15, half: 0.5, all: now }[usage.level] : 0.15; // 数や大さじは「少し」とみなす
+    const left = now - use;
+    const after = left <= 0.05 ? 'gone' : left < 0.4 ? 'low' : left < 0.75 ? 'half' : 'full';
+    const before = a && a.type === 'level' ? a.level : 'full';
+    return after === before || after === 'full' ? 'keep' : after;
+  }
   function openCookSheet(date, name, done) {
     const recipe = allRecipes().find((r) => r.name === name);
-    const rows = recipe ? recipe.ingredients.map((ing) => ({ ing, item: stockFor(ing) })) : [];
-    const usable = rows.filter((r) => r.item);
+    const amounts = (recipe && recipe.amounts) || {};
+    const rows = recipe ? recipe.ingredients.map((ing) => ({ ing, item: stockFor(ing), usage: amounts[ing] })) : [];
+    // マイ献立の調味料は、在庫に登録してあるものだけ減らせるように並べる（ないものは「在庫にない材料」に出さない）
+    const seasRows = recipe && Array.isArray(recipe.seasonings)
+      ? recipe.seasonings.filter((x) => !recipe.ingredients.includes(x)).map((ing) => ({ ing, item: stockFor(ing), usage: amounts[ing] })).filter((r) => r.item)
+      : [];
+    const usable = [...rows.filter((r) => r.item), ...seasRows];
     if (!usable.length) { // 在庫に使った材料がなければ、そのまま記録する
       addMeal(date, name);
       done(false);
@@ -1266,21 +1361,23 @@
     Object.assign(cook, { date, name, rows: usable, done });
     const [, mo, d] = date.split('-').map(Number);
     $('cook-h').textContent = `🍳 ${mo}月${d}日に「${name}」を作った`;
-    $('cook-list').innerHTML = usable.map(({ ing, item }, i) => {
+    $('cook-list').innerHTML = usable.map(({ ing, item, usage }, i) => {
       const a = item.amount;
       const now = a ? amountLabel(a) : '残りの量は未入力';
-      const control = a && a.type === 'count'
-        ? `<span class="use-count amount">使った数
+      const opt = (v, text, sel) => `<option value="${v}"${v === sel ? ' selected' : ''}>${text}</option>`;
+      let control;
+      if (a && a.type === 'count') {
+        control = `<span class="use-count amount">使った数
             <button type="button" class="step" data-step="-1" aria-label="1つ減らす">−</button>
-            <input type="number" class="amt-n" min="0" step="1" inputmode="numeric" value="1" aria-label="${escapeHtml(ing)}を使った数">
-            <button type="button" class="step" data-step="1" aria-label="1つ増やす">＋</button>${escapeHtml(a.unit)}</span>`
-        : `<select class="use-level" aria-label="${escapeHtml(ing)}の残り">
-            <option value="keep">そのまま</option>
-            <option value="half">半分くらいになった</option>
-            <option value="low">少しになった</option>
-            <option value="gone">使い切った（在庫から消す）</option>
+            <input type="number" class="amt-n" min="0" step="any" inputmode="decimal" value="${escapeHtml(defaultUsedCount(a, usage))}" aria-label="${escapeHtml(ing)}を使った数">
+            <button type="button" class="step" data-step="1" aria-label="1つ増やす">＋</button>${escapeHtml(a.unit)}</span>`;
+      } else {
+        const sel = defaultLevelAfter(a, usage);
+        control = `<select class="use-level" aria-label="${escapeHtml(ing)}の残り">
+            ${opt('keep', 'そのまま', sel)}${opt('half', '半分くらいになった', sel)}${opt('low', '少しになった', sel)}${opt('gone', '使い切った（在庫から消す）', sel)}
           </select>`;
-      return `<li data-row="${i}"><span class="cook-name">${escapeHtml(ing)}<span class="cook-now">${escapeHtml(now)}</span></span>${control}</li>`;
+      }
+      return `<li data-row="${i}"><span class="cook-name">${escapeHtml(ing)}<span class="cook-now">${escapeHtml(now)}</span>${usage ? `<span class="recipe-use">レシピ：${escapeHtml(usageLabel(usage))}</span>` : ''}</span>${control}</li>`;
     }).join('');
     const missing = rows.filter((r) => !r.item).map((r) => r.ing);
     $('cook-missing').textContent = missing.length ? `在庫にない材料：${missing.join('、')}` : '';
@@ -1296,8 +1393,8 @@
         const { item } = cook.rows[Number(li.dataset.row)];
         const countInput = li.querySelector('.amt-n');
         if (countInput) {
-          const used = Math.max(0, Math.round(Number(countInput.value)) || 0);
-          item.amount = { ...item.amount, n: Math.max(0, item.amount.n - used) };
+          const used = Math.max(0, Number(countInput.value) || 0);
+          item.amount = { ...item.amount, n: Math.max(0, Math.round((item.amount.n - used) * 100) / 100) };
           if (item.amount.n === 0) stock = stock.filter((s) => s !== item); // 使い切ったら在庫から消す
           return;
         }
@@ -1321,14 +1418,14 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('cook-sheet').hidden) closeCookSheet(); });
 
   // ---------- マイ献立 ----------
-  const rf = { editingId: null, ings: [], seas: new Set(), cat: null };
+  const rf = { editingId: null, ings: [], seas: new Set(), cat: null, amounts: {} };
   function renderMyList() {
     $('my-count').textContent = myRecipes.length ? `(${myRecipes.length})` : '';
     $('my-list').innerHTML = myRecipes.map((r) => `
       <li data-id="${escapeHtml(r.id)}">
         <div class="my-info">
           <div class="my-name">${escapeHtml(r.name)}</div>
-          <div class="my-meta">${TYPE_EMOJI[r.type] || '🍴'} ${escapeHtml(r.type)} ・ ${escapeHtml(r.time)}分 ・ 材料：${r.ingredients.map(escapeHtml).join('、')}</div>
+          <div class="my-meta">${TYPE_EMOJI[r.type] || '🍴'} ${escapeHtml(r.type)} ・ ${escapeHtml(r.time)}分 ・ 材料：${r.ingredients.map((n) => escapeHtml(withUsage(n, r.amounts))).join('、')}</div>
         </div>
         <button type="button" class="link my-edit">編集</button>
         <button type="button" class="del my-del" aria-label="${escapeHtml(r.name)}を削除">×</button>
@@ -1355,11 +1452,24 @@
     const seasList = [...SEASONINGS, ...[...rf.seas].filter((x) => !SEASONINGS.includes(x))];
     $('rf-seas').innerHTML = seasList.map((n) =>
       `<button type="button" class="chip" data-seas="${escapeHtml(n)}" aria-pressed="${rf.seas.has(n)}">${escapeHtml(n)}</button>`).join('');
+    // 選んだ材料・調味料ごとの使う量
+    const items = [...rf.ings.map((n) => [n, '材料']), ...[...rf.seas].filter((n) => !rf.ings.includes(n)).map((n) => [n, '調味料'])];
+    $('rf-amounts').innerHTML = items.length
+      ? items.map(([n, kind]) => `<li data-name="${escapeHtml(n)}"><span class="use-name">${escapeHtml(n)}<small>${kind}</small></span>${usageHtml(rf.amounts[n], n)}</li>`).join('')
+      : '<li class="empty" style="border:none">材料や調味料を選ぶと、ここで使う量を入れられます</li>';
   }
+  // 使う量の入力は、その場で覚えておく（一覧を描き直しても消えないように）
+  function onAmountEvent(e) {
+    const li = e.target.closest('li[data-name]');
+    if (!li) return;
+    if (handleAmountUi(e)) rf.amounts[li.dataset.name] = readUsage(li);
+  }
+  ['input', 'change', 'click'].forEach((t) => $('rf-amounts').addEventListener(t, onAmountEvent));
   function openRecipeForm(r) {
     rf.editingId = r ? r.id : null;
     rf.ings = r ? [...r.ingredients] : [];
     rf.seas = new Set(r ? r.seasonings || [] : []);
+    rf.amounts = r && r.amounts ? { ...r.amounts } : {};
     rf.cat = null;
     $('rf-name').value = r ? r.name : '';
     $('rf-time').value = r ? String(r.time) : '30';
@@ -1429,9 +1539,11 @@
       $('rf-error').hidden = false;
       return;
     }
+    const amounts = {};
+    for (const n of [...rf.ings, ...rf.seas]) if (rf.amounts[n]) amounts[n] = rf.amounts[n];
     const r = {
       id: rf.editingId || 'my-' + newId(), name, ingredients: [...rf.ings], seasonings: [...rf.seas],
-      time: Number($('rf-time').value), type: $('rf-type').value, url,
+      amounts, time: Number($('rf-time').value), type: $('rf-type').value, url,
     };
     const i = myRecipes.findIndex((x) => x.id === r.id);
     if (i >= 0) myRecipes[i] = r; else myRecipes.unshift(r);
