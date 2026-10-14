@@ -13,28 +13,28 @@
     --text: #23211d;
     --muted: #6b665c;
     --border: #e2ddd2;
-    --accent: #2f7d5b;
+    --accent: #a65a3a;
     --accent-text: #ffffff;
     --chip: #f5ede1;
-    --chip-on: #2f7d5b;
+    --chip-on: #a65a3a;
     --danger: #c62828;
     --danger-bg: #fdecea;
-    --ok-bg: #e8f3ed;
+    --ok-bg: #f6e6d6;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #161614;
-      --surface: #22211e;
-      --text: #ece9e2;
-      --muted: #a39e93;
-      --border: #3a3833;
-      --accent: #4fae84;
-      --accent-text: #0e1a14;
-      --chip: #2e2d29;
-      --chip-on: #4fae84;
+      --bg: #18150f;
+      --surface: #24201b;
+      --text: #ede6dc;
+      --muted: #a89d90;
+      --border: #3d362e;
+      --accent: #e0946f;
+      --accent-text: #2a170e;
+      --chip: #312b24;
+      --chip-on: #e0946f;
       --danger: #ff6b6b;
       --danger-bg: #3a1f1f;
-      --ok-bg: #1d3027;
+      --ok-bg: #3a2b20;
     }
   }
   * { box-sizing: border-box; }
@@ -215,6 +215,7 @@
     border: 1px solid var(--accent); border-radius: 10px; padding: 8px 14px;
   }
   .notice { font-size: .9rem; color: var(--muted); margin: 12px 0 0; }
+  .notice a { color: var(--accent); font-weight: 700; }
   .error { color: var(--danger); }
 </style>
 </head>
