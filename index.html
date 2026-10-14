@@ -102,7 +102,7 @@
   }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   label.field { display: block; font-size: .85rem; color: var(--muted); margin: 14px 0 4px; }
-  input[type="date"], input[type="search"], input[type="number"], select {
+  input[type="date"], input[type="search"], input[type="number"], input[type="text"], input[type="url"], select {
     font: inherit;
     color: var(--text);
     background: var(--bg);
@@ -235,6 +235,55 @@
   .import-box p { margin: 0 0 10px; font-size: .9rem; }
   .import-box .row button { flex: 1; }
   .notice a { color: var(--accent); font-weight: 700; }
+  .ok-msg { color: var(--accent); font-weight: 700; font-size: .9rem; }
+  .card-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+  .card-actions .recipe-link { margin-top: 0; }
+  .mine-tag { font-size: .75rem; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); vertical-align: 2px; margin-left: 6px; font-weight: 600; }
+  .seasonings { font-size: .85rem; color: var(--muted); margin: 8px 0 0; }
+
+  /* マイ献立 */
+  .section-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .section-head h2 { margin: 0; }
+  #recipe-form { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+  #recipe-form input[type="text"], #recipe-form input[type="url"] { width: 100%; }
+  .picked-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 1.5em; }
+  .picked-chips .chip { min-height: 34px; padding: 4px 12px; font-size: .9rem; }
+  .picked-chips .chip::after { content: " ×"; opacity: .7; }
+  .free-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 8px; }
+  .free-add input { min-width: 0; }
+  .form-error { color: var(--danger); font-size: .9rem; margin: 10px 0 0; }
+  ul.my-list { list-style: none; margin: 12px 0 0; padding: 0; }
+  ul.my-list li { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); }
+  ul.my-list .my-info { flex: 1; min-width: 0; }
+  ul.my-list .my-name { font-weight: 700; overflow-wrap: anywhere; }
+  ul.my-list .my-meta { font-size: .8rem; color: var(--muted); }
+
+  /* カレンダー（月曜始まり） */
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .cal-head h2 { margin: 0; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+  .cal-dow { text-align: center; font-size: .75rem; color: var(--muted); font-weight: 700; padding: 2px 0; }
+  .cal-day {
+    font: inherit; color: var(--text); background: var(--bg); border: 1px solid transparent; border-radius: 8px;
+    min-height: 58px; padding: 3px 2px; cursor: pointer; display: flex; flex-direction: column; align-items: stretch;
+    gap: 1px; min-width: 0; text-align: left;
+  }
+  .cal-day .num { font-size: .8rem; font-weight: 700; text-align: center; }
+  .cal-day .meal {
+    font-size: .62rem; line-height: 1.25; background: var(--ok-bg); border-radius: 4px; padding: 0 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cal-day .more { font-size: .6rem; color: var(--muted); text-align: center; }
+  .cal-day.out { opacity: .4; }
+  .cal-day.sat .num { color: #3b6ea8; }
+  .cal-day.sun .num { color: var(--danger); }
+  .cal-day.today { border-color: var(--accent); }
+  .cal-day[aria-pressed="true"] { border: 2px solid var(--accent); background: var(--surface); }
+  ul.day-meals { list-style: none; margin: 0 0 12px; padding: 0; }
+  ul.day-meals li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  ul.day-meals .meal-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .day-add { display: grid; gap: 8px; }
+  .day-add select, .day-add input { width: 100%; min-width: 0; }
   .error { color: var(--danger); }
 </style>
 </head>
@@ -297,11 +346,82 @@
             <option value="洋食">🍝 洋食</option>
             <option value="中華">🥟 中華</option>
             <option value="エスニック">🌶️ エスニック</option>
+            <option value="その他">🍴 その他</option>
           </select>
         </div>
       </div>
       <button class="primary wide" id="suggest-btn">献立を提案</button>
       <div id="results" aria-live="polite"></div>
+    </section>
+
+    <section aria-labelledby="my-h">
+      <div class="section-head">
+        <h2 id="my-h">📝 マイ献立 <span id="my-count"></span></h2>
+        <button type="button" class="secondary" id="my-new-btn">＋ 献立を追加</button>
+      </div>
+      <p class="notice" style="margin:8px 0 0">自分の献立を登録すると、献立の提案にも出てきます。</p>
+      <form id="recipe-form" hidden novalidate>
+        <label class="field" for="rf-name" style="margin-top:0">料理名</label>
+        <input type="text" id="rf-name" maxlength="40" placeholder="例: 鶏肉と大根の煮物" autocomplete="off">
+        <div class="grid2">
+          <div>
+            <label class="field" for="rf-time">⏱️ 調理時間</label>
+            <select id="rf-time">
+              <option value="10">10分</option><option value="15">15分</option><option value="20">20分</option>
+              <option value="30" selected>30分</option><option value="45">45分</option><option value="60">60分</option><option value="90">90分</option>
+            </select>
+          </div>
+          <div>
+            <label class="field" for="rf-type">🍴 タイプ</label>
+            <select id="rf-type">
+              <option value="和食">🍙 和食</option><option value="洋食">🍝 洋食</option><option value="中華">🥟 中華</option>
+              <option value="エスニック">🌶️ エスニック</option><option value="その他">🍴 その他</option>
+            </select>
+          </div>
+        </div>
+        <span class="field" style="display:block;font-size:.85rem;color:var(--muted);margin:14px 0 4px">🥕 使う材料（在庫と照らし合わせます）</span>
+        <div class="finder">
+          <input type="search" id="rf-search" placeholder="材料名" aria-label="材料名で検索" autocomplete="off">
+          <select id="rf-cat" aria-label="材料のカテゴリ"></select>
+        </div>
+        <div id="rf-catalog"></div>
+        <div class="picked-chips" id="rf-ings" aria-label="選んだ材料"></div>
+        <span class="field" style="display:block;font-size:.85rem;color:var(--muted);margin:14px 0 4px">🧂 調味料（タップで選択）</span>
+        <div class="chips" id="rf-seas"></div>
+        <div class="free-add">
+          <input type="text" id="rf-seas-extra" maxlength="20" placeholder="ほかの調味料" aria-label="ほかの調味料" autocomplete="off">
+          <button type="button" class="secondary" id="rf-seas-add">追加</button>
+        </div>
+        <label class="field" for="rf-url">🔗 レシピのURL（任意）</label>
+        <input type="url" id="rf-url" placeholder="https://..." autocomplete="off">
+        <p class="form-error" id="rf-error" hidden></p>
+        <div class="card-actions">
+          <button type="submit" class="primary" id="rf-save">保存</button>
+          <button type="button" class="link" id="rf-cancel">やめる</button>
+        </div>
+      </form>
+      <ul class="my-list" id="my-list"></ul>
+    </section>
+  </div>
+
+  <div class="screen" id="screen-cal" hidden>
+    <section aria-labelledby="cal-h">
+      <div class="cal-head">
+        <button type="button" class="step" id="cal-prev" aria-label="前の月">‹</button>
+        <h2 id="cal-h"></h2>
+        <button type="button" class="step" id="cal-next" aria-label="次の月">›</button>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <button type="button" class="link" id="cal-today" style="margin-top:6px">今日に戻る</button>
+    </section>
+    <section aria-labelledby="day-h">
+      <h2 id="day-h"></h2>
+      <ul class="day-meals" id="day-meals"></ul>
+      <div class="day-add">
+        <select id="day-select" aria-label="作った献立を選ぶ"></select>
+        <input type="text" id="day-free" maxlength="40" placeholder="または料理名を入力" aria-label="料理名を入力" autocomplete="off">
+        <button type="button" class="primary" id="day-add-btn">この日に登録</button>
+      </div>
     </section>
   </div>
 </main>
@@ -309,6 +429,7 @@
 <nav class="bottom-nav" aria-label="画面の切り替え">
   <a href="#stock" id="nav-stock"><span class="nav-icon" aria-hidden="true">🧊</span>在庫管理</a>
   <a href="#menu" id="nav-menu"><span class="nav-icon" aria-hidden="true">🍳</span>献立</a>
+  <a href="#cal" id="nav-cal"><span class="nav-icon" aria-hidden="true">📅</span>カレンダー</a>
 </nav>
 
 <script>
@@ -338,6 +459,11 @@
   };
   const TYPE_EMOJI = { '和食': '🍙', '洋食': '🍝', '中華': '🥟', 'エスニック': '🌶️' };
   const STORAGE_KEY = 'cookingMenu.stock';
+  const MY_RECIPES_KEY = 'cookingMenu.myRecipes'; // 自分で登録した献立
+  const MEALS_KEY = 'cookingMenu.meals'; // カレンダー: { 'YYYY-MM-DD': [{ id, name }] }
+  const SEASONINGS = ['醤油', 'みりん', '酒', '砂糖', '塩', 'こしょう', '味噌', '酢', 'ごま油', 'サラダ油', 'オリーブオイル',
+    'マヨネーズ', 'ケチャップ', 'ソース', 'ポン酢', 'めんつゆ', 'だし', 'コンソメ', '鶏がらスープの素', 'オイスターソース',
+    '豆板醤', 'カレー粉', 'にんにく', 'しょうが'];
   const URGENT_DAYS = 3;
   const RESULT_COUNT = 3;
 
@@ -347,6 +473,8 @@
   let stock = loadStock();
   let editingId = null; // 在庫一覧で賞味期限を編集中の行
   let recipes = null;
+  let myRecipes = loadJson(MY_RECIPES_KEY, []).filter((r) => r && r.name && Array.isArray(r.ingredients));
+  let meals = loadJson(MEALS_KEY, {});
   let recipesError = null;
 
   // ---------- 保存 ----------
@@ -357,6 +485,24 @@
     } catch (e) {
       return [];
     }
+  }
+  function loadJson(key, fallback) {
+    try {
+      const v = JSON.parse(localStorage.getItem(key) || 'null');
+      return v && typeof v === 'object' ? v : fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+  function saveJson(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      alert('データを保存できませんでした（プライベートブラウズ等では保存されません）');
+    }
+  }
+  function newId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
   function saveStock() {
     try {
@@ -882,13 +1028,17 @@
     return { recipe: r, have, missing, ratio, score: ratio + bonus };
   }
 
+  // 提案に使う献立：マイ献立 ＋ recipes.json
+  function allRecipes() {
+    return [...myRecipes.map((r) => ({ ...r, mine: true })), ...(recipes || [])];
+  }
   function suggest() {
     const out = $('results');
-    if (recipesError) {
+    if (recipesError && !myRecipes.length) {
       out.innerHTML = `<p class="notice error">recipes.json を読み込めませんでした（${escapeHtml(recipesError.message)}）。<br>ファイルを直接開いた場合は読み込めません。GitHub Pages かローカルサーバー経由で開いてください。</p>`;
       return;
     }
-    if (!recipes) {
+    if (!recipes && !recipesError) {
       out.innerHTML = '<p class="notice">📖 レシピを読み込み中です…</p>';
       return;
     }
@@ -899,7 +1049,7 @@
     const maxTime = Number($('time').value);
     const mood = $('mood').value;
     const idx = stockIndex();
-    const ranked = recipes
+    const ranked = allRecipes()
       .filter((r) => !maxTime || Number(r.time) <= maxTime)
       .filter((r) => !mood || r.type === mood)
       .map((r) => scoreRecipe(r, idx))
@@ -919,22 +1069,244 @@
     const r = x.recipe;
     const pct = Math.round(x.ratio * 100);
     const url = typeof r.url === 'string' && /^https?:\/\//i.test(r.url) ? r.url : '';
+    const seas = Array.isArray(r.seasonings) ? r.seasonings : [];
     return `
       <article class="card">
-        <h4>${escapeHtml(r.name)}</h4>
+        <h4>${escapeHtml(r.name)}${r.mine ? '<span class="mine-tag">マイ献立</span>' : ''}</h4>
         <p class="meta">⏱️ ${escapeHtml(r.time)}分 ・ ${TYPE_EMOJI[r.type] || '🍴'} ${escapeHtml(r.type || '')} ・ 在庫で${pct}%揃う${pct === 100 ? ' 🎉' : ''}</p>
         <div class="bar"><span style="width:${pct}%"></span></div>
         <div class="label">✅ 使える在庫</div>
         <div class="tags">${x.have.map((h) => `<span class="tag${isUrgent(h.days) ? ' urgent' : ''}">${escapeHtml(h.name)}${isUrgent(h.days) ? `（${escapeHtml(expiryLabel(h.days))}）` : ''}</span>`).join('')}</div>
         <div class="label">🛒 足りない食材</div>
         <div class="tags">${x.missing.length ? x.missing.map((m) => `<span class="tag missing">${escapeHtml(m)}</span>`).join('') : '<span class="tag">なし（全部揃っています 🎉）</span>'}</div>
-        ${url ? `<a class="recipe-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">📖 レシピを見る ↗</a>` : ''}
+        ${seas.length ? `<p class="seasonings">🧂 調味料：${seas.map(escapeHtml).join('、')}</p>` : ''}
+        <div class="card-actions">
+          ${url ? `<a class="recipe-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">📖 レシピを見る ↗</a>` : ''}
+          <button type="button" class="secondary cook-btn" data-name="${escapeHtml(r.name)}">📅 今日作った</button>
+        </div>
       </article>`;
   }
 
   $('suggest-btn').addEventListener('click', suggest);
+  // 提案カードの「今日作った」→ 今日のカレンダーに登録
+  $('results').addEventListener('click', (e) => {
+    const btn = e.target.closest('.cook-btn');
+    if (!btn) return;
+    addMeal(toYmd(today()), btn.dataset.name);
+    btn.outerHTML = '<span class="ok-msg">✓ 今日のカレンダーに登録しました</span>';
+  });
 
-  // ---------- 画面切り替え（#stock = 在庫管理、#menu = 献立） ----------
+  // ---------- マイ献立 ----------
+  const rf = { editingId: null, ings: [], seas: new Set(), cat: null };
+  function renderMyList() {
+    $('my-count').textContent = myRecipes.length ? `(${myRecipes.length})` : '';
+    $('my-list').innerHTML = myRecipes.map((r) => `
+      <li data-id="${escapeHtml(r.id)}">
+        <div class="my-info">
+          <div class="my-name">${escapeHtml(r.name)}</div>
+          <div class="my-meta">${TYPE_EMOJI[r.type] || '🍴'} ${escapeHtml(r.type)} ・ ${escapeHtml(r.time)}分 ・ 材料：${r.ingredients.map(escapeHtml).join('、')}</div>
+        </div>
+        <button type="button" class="link my-edit">編集</button>
+        <button type="button" class="del my-del" aria-label="${escapeHtml(r.name)}を削除">×</button>
+      </li>`).join('');
+  }
+  function renderRecipeForm() {
+    $('rf-error').hidden = true; // 何か操作したらエラー表示は消す
+    $('rf-cat').innerHTML = `<option value="">📂 カテゴリ</option>` + Object.keys(CATALOG).map((cat) =>
+      `<option value="${escapeHtml(cat)}"${cat === rf.cat ? ' selected' : ''}>${CAT_EMOJI[cat] || ''} ${escapeHtml(cat)}</option>`).join('');
+    const chip = (name) => `<button type="button" class="chip" data-ing="${escapeHtml(name)}" aria-pressed="${rf.ings.includes(name)}">${escapeHtml(name)}</button>`;
+    const raw = $('rf-search').value.trim().slice(0, 40);
+    const q = normalize(raw);
+    if (q) {
+      const extra = exactCatalogName(q) ? '' : `<button type="button" class="chip product-add" data-ing="${escapeHtml(raw)}">＋「${escapeHtml(raw)}」を材料に追加</button>`;
+      $('rf-catalog').innerHTML = `<div class="chips">${searchCatalog(q).map(chip).join('')}${extra}</div>`;
+    } else if (rf.cat) {
+      $('rf-catalog').innerHTML = `<div class="chips">${CATALOG[rf.cat].map(chip).join('')}</div>`;
+    } else {
+      $('rf-catalog').innerHTML = '';
+    }
+    $('rf-ings').innerHTML = rf.ings.length
+      ? rf.ings.map((n) => `<button type="button" class="chip" aria-pressed="true" data-ing="${escapeHtml(n)}" aria-label="${escapeHtml(n)}を材料から外す">${escapeHtml(n)}</button>`).join('')
+      : '<span class="notice" style="margin:0">材料を検索するか、カテゴリから選んでください</span>';
+    const seasList = [...SEASONINGS, ...[...rf.seas].filter((x) => !SEASONINGS.includes(x))];
+    $('rf-seas').innerHTML = seasList.map((n) =>
+      `<button type="button" class="chip" data-seas="${escapeHtml(n)}" aria-pressed="${rf.seas.has(n)}">${escapeHtml(n)}</button>`).join('');
+  }
+  function openRecipeForm(r) {
+    rf.editingId = r ? r.id : null;
+    rf.ings = r ? [...r.ingredients] : [];
+    rf.seas = new Set(r ? r.seasonings || [] : []);
+    rf.cat = null;
+    $('rf-name').value = r ? r.name : '';
+    $('rf-time').value = r ? String(r.time) : '30';
+    $('rf-type').value = r ? r.type : '和食';
+    $('rf-url').value = r ? r.url || '' : '';
+    $('rf-search').value = '';
+    $('rf-seas-extra').value = '';
+    $('rf-error').hidden = true;
+    $('recipe-form').hidden = false;
+    $('my-new-btn').hidden = true;
+    renderRecipeForm();
+    $('rf-name').focus();
+  }
+  function closeRecipeForm() {
+    $('recipe-form').hidden = true;
+    $('my-new-btn').hidden = false;
+    rf.editingId = null;
+  }
+  $('my-new-btn').addEventListener('click', () => openRecipeForm(null));
+  $('rf-cancel').addEventListener('click', closeRecipeForm);
+  $('rf-search').addEventListener('input', () => {
+    if ($('rf-search').value.trim()) rf.cat = null;
+    renderRecipeForm();
+  });
+  $('rf-cat').addEventListener('change', () => {
+    rf.cat = $('rf-cat').value || null;
+    $('rf-search').value = '';
+    renderRecipeForm();
+  });
+  // 材料の候補・選んだ材料：タップで追加／外す
+  ['rf-catalog', 'rf-ings'].forEach((id) => $(id).addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-ing]');
+    if (!btn) return;
+    const name = btn.dataset.ing;
+    if (rf.ings.includes(name)) rf.ings = rf.ings.filter((n) => n !== name);
+    else rf.ings.push(name);
+    if (btn.classList.contains('product-add')) $('rf-search').value = '';
+    renderRecipeForm();
+  }));
+  $('rf-seas').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-seas]');
+    if (!btn) return;
+    const n = btn.dataset.seas;
+    if (rf.seas.has(n)) rf.seas.delete(n); else rf.seas.add(n);
+    renderRecipeForm();
+  });
+  function addExtraSeasoning() {
+    const n = $('rf-seas-extra').value.trim().slice(0, 20);
+    if (!n) return;
+    rf.seas.add(n);
+    $('rf-seas-extra').value = '';
+    renderRecipeForm();
+  }
+  $('rf-seas-add').addEventListener('click', addExtraSeasoning);
+  $('rf-seas-extra').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addExtraSeasoning(); }
+  });
+  $('recipe-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = $('rf-name').value.trim();
+    const url = $('rf-url').value.trim();
+    const err = !name ? '料理名を入れてください'
+      : !rf.ings.length ? '材料を1つ以上選んでください'
+      : url && !/^https?:\/\//i.test(url) ? 'URLは http:// か https:// で始めてください' : '';
+    if (err) {
+      $('rf-error').textContent = err;
+      $('rf-error').hidden = false;
+      return;
+    }
+    const r = {
+      id: rf.editingId || 'my-' + newId(), name, ingredients: [...rf.ings], seasonings: [...rf.seas],
+      time: Number($('rf-time').value), type: $('rf-type').value, url,
+    };
+    const i = myRecipes.findIndex((x) => x.id === r.id);
+    if (i >= 0) myRecipes[i] = r; else myRecipes.unshift(r);
+    saveJson(MY_RECIPES_KEY, myRecipes);
+    closeRecipeForm();
+    renderMyList();
+  });
+  $('my-list').addEventListener('click', (e) => {
+    const li = e.target.closest('li[data-id]');
+    if (!li) return;
+    const r = myRecipes.find((x) => x.id === li.dataset.id);
+    if (!r) return;
+    if (e.target.closest('.my-edit')) {
+      openRecipeForm(r);
+      $('recipe-form').scrollIntoView({ block: 'start', behavior: 'smooth' });
+    } else if (e.target.closest('.my-del') && confirm(`「${r.name}」をマイ献立から削除しますか？`)) {
+      myRecipes = myRecipes.filter((x) => x.id !== r.id);
+      saveJson(MY_RECIPES_KEY, myRecipes);
+      if (rf.editingId === r.id) closeRecipeForm();
+      renderMyList();
+    }
+  });
+
+  // ---------- カレンダー（月曜始まり） ----------
+  const DOW = ['日', '月', '火', '水', '木', '金', '土'];
+  const cal = { month: new Date(today().getFullYear(), today().getMonth(), 1), selected: toYmd(today()) };
+  function addMeal(ymd, name) {
+    (meals[ymd] = meals[ymd] || []).push({ id: newId(), name });
+    saveJson(MEALS_KEY, meals);
+    renderCalendar();
+  }
+  function renderCalendar() {
+    const y = cal.month.getFullYear();
+    const m = cal.month.getMonth();
+    $('cal-h').textContent = `${y}年${m + 1}月`;
+    const offset = (new Date(y, m, 1).getDay() + 6) % 7; // 月曜=0
+    const days = new Date(y, m + 1, 0).getDate();
+    const cells = Math.ceil((offset + days) / 7) * 7;
+    const todayYmd = toYmd(today());
+    let html = ['月', '火', '水', '木', '金', '土', '日'].map((d) => `<div class="cal-dow">${d}</div>`).join('');
+    for (let i = 0; i < cells; i++) {
+      const d = new Date(y, m, 1 - offset + i);
+      const ymd = toYmd(d);
+      const list = meals[ymd] || [];
+      const cls = ['cal-day', d.getMonth() !== m ? 'out' : '', d.getDay() === 6 ? 'sat' : '', d.getDay() === 0 ? 'sun' : '', ymd === todayYmd ? 'today' : ''].filter(Boolean).join(' ');
+      html += `<button type="button" class="${cls}" data-date="${ymd}" aria-pressed="${ymd === cal.selected}" aria-label="${d.getMonth() + 1}月${d.getDate()}日 ${list.length ? `${list.length}件` : '記録なし'}">
+          <span class="num">${d.getDate()}</span>
+          ${list.slice(0, 2).map((x) => `<span class="meal">${escapeHtml(x.name)}</span>`).join('')}
+          ${list.length > 2 ? `<span class="more">+${list.length - 2}</span>` : ''}
+        </button>`;
+    }
+    $('cal-grid').innerHTML = html;
+    renderDay();
+  }
+  function renderDay() {
+    const [y, mo, d] = cal.selected.split('-').map(Number);
+    const date = new Date(y, mo - 1, d);
+    $('day-h').textContent = `🍽️ ${mo}月${d}日（${DOW[date.getDay()]}）に作った献立`;
+    const list = meals[cal.selected] || [];
+    $('day-meals').innerHTML = list.length
+      ? list.map((x) => `<li data-id="${escapeHtml(x.id)}"><span class="meal-name">${escapeHtml(x.name)}</span>
+          <button type="button" class="del" aria-label="${escapeHtml(x.name)}を削除">×</button></li>`).join('')
+      : '<li class="empty" style="border:none">まだ登録されていません</li>';
+    const opt = (r) => `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`;
+    $('day-select').innerHTML = '<option value="">作った献立を選ぶ</option>' +
+      (myRecipes.length ? `<optgroup label="マイ献立">${myRecipes.map(opt).join('')}</optgroup>` : '') +
+      (recipes && recipes.length ? `<optgroup label="レシピ">${recipes.map(opt).join('')}</optgroup>` : '');
+  }
+  $('cal-grid').addEventListener('click', (e) => {
+    const btn = e.target.closest('.cal-day');
+    if (!btn) return;
+    cal.selected = btn.dataset.date;
+    const [y, m] = cal.selected.split('-').map(Number);
+    cal.month = new Date(y, m - 1, 1); // 前後の月の日を押したらその月へ
+    renderCalendar();
+  });
+  $('cal-prev').addEventListener('click', () => { cal.month = new Date(cal.month.getFullYear(), cal.month.getMonth() - 1, 1); renderCalendar(); });
+  $('cal-next').addEventListener('click', () => { cal.month = new Date(cal.month.getFullYear(), cal.month.getMonth() + 1, 1); renderCalendar(); });
+  $('cal-today').addEventListener('click', () => {
+    cal.month = new Date(today().getFullYear(), today().getMonth(), 1);
+    cal.selected = toYmd(today());
+    renderCalendar();
+  });
+  $('day-add-btn').addEventListener('click', () => {
+    const name = ($('day-free').value.trim() || $('day-select').value).slice(0, 40);
+    if (!name) { alert('献立を選ぶか、料理名を入力してください'); return; }
+    $('day-free').value = '';
+    addMeal(cal.selected, name);
+  });
+  $('day-meals').addEventListener('click', (e) => {
+    const li = e.target.closest('li[data-id]');
+    if (!li || !e.target.closest('.del')) return;
+    meals[cal.selected] = (meals[cal.selected] || []).filter((x) => x.id !== li.dataset.id);
+    if (!meals[cal.selected].length) delete meals[cal.selected];
+    saveJson(MEALS_KEY, meals);
+    renderCalendar();
+  });
+
+  // ---------- 画面切り替え（#stock = 在庫管理、#menu = 献立、#cal = カレンダー） ----------
   function renderNav() {
     const urgent = stock.filter((s) => isUrgent(daysLeft(s.expiry))).length;
     $('nav-stock').innerHTML = `<span class="nav-icon" aria-hidden="true">🧊</span>在庫管理${urgent ? `<span class="badge" aria-label="期限が近いもの${urgent}件">${urgent}</span>` : ''}`;
@@ -945,12 +1317,15 @@
       (products ? `。既製品 ${products}件は献立に使いません` : '');
   }
   function showScreen() {
-    const screen = location.hash === '#menu' ? 'menu' : location.hash === '#stock' ? 'stock' : (stock.some((s) => !s.product) ? 'menu' : 'stock');
-    $('screen-stock').hidden = screen !== 'stock';
-    $('screen-menu').hidden = screen !== 'menu';
-    $('nav-stock').removeAttribute('aria-current');
-    $('nav-menu').removeAttribute('aria-current');
+    const SCREENS = ['stock', 'menu', 'cal'];
+    const fromHash = location.hash.slice(1);
+    const screen = SCREENS.includes(fromHash) ? fromHash : (stock.some((s) => !s.product) ? 'menu' : 'stock');
+    for (const name of SCREENS) {
+      $(`screen-${name}`).hidden = screen !== name;
+      $(`nav-${name}`).toggleAttribute('aria-current', false);
+    }
     $(`nav-${screen}`).setAttribute('aria-current', 'page');
+    if (screen === 'cal') renderCalendar();
     if (screen === 'menu' && $('results').innerHTML.trim()) suggest(); // 在庫が変わっていても最新の在庫で出し直す
     window.scrollTo(0, 0);
   }
@@ -958,8 +1333,9 @@
 
   updateSelection();
   renderStock();
+  renderMyList();
   showScreen();
-  loadRecipes();
+  loadRecipes().then(() => { if (!$('screen-cal').hidden) renderDay(); });
 })();
 </script>
 </body>
