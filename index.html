@@ -85,6 +85,21 @@
     font-size: .75rem; font-weight: 700; line-height: 1.4em; text-align: center;
   }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  /* 在庫一覧のカテゴリタブ（横にスクロール） */
+  .tabs {
+    display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+    margin: 12px -16px 10px; padding: 0 16px 2px;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs[hidden] { display: none; }
+  .tab {
+    flex: none; font: inherit; font-size: .85rem; color: var(--text); background: none;
+    border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; min-height: 36px;
+    cursor: pointer; white-space: nowrap;
+  }
+  .tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 700; }
+  .tab .tab-n { margin-left: 4px; font-size: .75rem; opacity: .8; }
+  .tab .tab-urgent { display: inline-block; width: 7px; height: 7px; margin-left: 4px; border-radius: 50%; background: var(--danger); vertical-align: 1px; }
   .chip {
     border: 1px solid var(--border);
     background: var(--chip);
@@ -332,6 +347,7 @@
         <h2 id="stock-h" style="margin:0">🧺 在庫 <span id="stock-count"></span></h2>
         <button class="link" id="clear-btn" hidden>すべて削除</button>
       </div>
+      <div class="tabs" id="stock-tabs" role="tablist" aria-label="在庫のカテゴリ" hidden></div>
       <div style="margin-top:12px"><ul class="stock" id="stock-list"></ul></div>
     </section>
 
@@ -761,6 +777,12 @@
       .replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
   }
   const CATALOG_NAMES = Object.values(CATALOG).flat();
+  const CAT_OF = Object.fromEntries(Object.entries(CATALOG).flatMap(([cat, items]) => items.map((n) => [n, cat])));
+  // 在庫一覧のタブで使うカテゴリ（既製品と、リストにない名前は別のタブにする）
+  function stockCategory(s) {
+    if (s.product) return '既製品';
+    return CAT_OF[s.name] || 'その他';
+  }
   // 入力がリストの食材名（またはよみ）とぴったり一致すれば、その食材名
   function exactCatalogName(q) {
     return CATALOG_NAMES.find((name) => normalize(name) === q || normalize(READINGS[name] || '').split(' ').includes(q));
@@ -889,15 +911,37 @@
     if (s.bought) return `${escapeHtml(boughtLabel(daysSince(s.bought)))}<br>${escapeHtml(shortDate(s.bought))}購入`;
     return `${escapeHtml(expiryLabel(null))}<br>購入日不明`;
   }
+  let stockTab = ''; // 在庫一覧で表示中のカテゴリ。'' はすべて
+  function renderStockTabs(all) {
+    const order = [...Object.keys(CATALOG), '既製品', 'その他'];
+    const groups = order.map((cat) => {
+      const items = all.filter((s) => stockCategory(s) === cat);
+      return { cat, n: items.length, urgent: items.some((s) => isUrgent(s.days)) };
+    }).filter((g) => g.n);
+    if (stockTab && !groups.some((g) => g.cat === stockTab)) stockTab = ''; // 空になったカテゴリは「すべて」に戻す
+    const tab = (cat, label, n, urgent) =>
+      `<button type="button" class="tab" role="tab" data-cat="${escapeHtml(cat)}" aria-selected="${cat === stockTab}">${label}<span class="tab-n">${n}</span>${urgent ? '<span class="tab-urgent" aria-label="期限が近いものあり"></span>' : ''}</button>`;
+    $('stock-tabs').hidden = !all.length;
+    $('stock-tabs').innerHTML = tab('', 'すべて', all.length, false) + groups.map((g) =>
+      tab(g.cat, `${CAT_EMOJI[g.cat] || (g.cat === '既製品' ? '🛍️' : '🍴')} ${escapeHtml(g.cat)}`, g.n, g.urgent)).join('');
+  }
+  $('stock-tabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab');
+    if (!btn) return;
+    stockTab = btn.dataset.cat;
+    renderStock();
+  });
   function renderStock() {
-    const list = sortedStock();
+    const all = sortedStock();
     renderNav();
-    $('stock-count').textContent = list.length ? `(${list.length})` : '';
-    $('clear-btn').hidden = list.length === 0;
-    if (!list.length) {
+    $('stock-count').textContent = all.length ? `(${all.length})` : '';
+    $('clear-btn').hidden = all.length === 0;
+    renderStockTabs(all);
+    if (!all.length) {
       $('stock-list').innerHTML = '<li class="empty" style="border:none;padding:0">🫙 まだ登録されていません</li>';
       return;
     }
+    const list = stockTab ? all.filter((s) => stockCategory(s) === stockTab) : all;
     $('stock-list').innerHTML = list.map((s) => `
       <li class="${isUrgent(s.days) ? 'urgent' : ''}" data-id="${escapeHtml(s.id)}">
         <button type="button" class="item-btn" aria-label="${escapeHtml(s.name)}の購入日・賞味期限・残りの量を変更">${escapeHtml(s.name)}${s.product ? '<span class="kind">既製品</span>' : ''}${subLabel(s)}</button>
