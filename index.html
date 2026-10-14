@@ -37,7 +37,8 @@
       --ok-bg: #3a2b20;
     }
   }
-  * { box-sizing: border-box; }
+  /* ダブルタップでの拡大を止める（ピンチでの拡大はそのまま使える） */
+  * { box-sizing: border-box; touch-action: manipulation; }
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0;
