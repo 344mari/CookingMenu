@@ -8,33 +8,33 @@
 <title>冷蔵庫の献立</title>
 <style>
   :root {
-    --bg: #f6f4ef;
+    --bg: #fdf7ef;
     --surface: #ffffff;
     --text: #23211d;
     --muted: #6b665c;
     --border: #e2ddd2;
-    --accent: #2f7d5b;
+    --accent: #a65a3a;
     --accent-text: #ffffff;
-    --chip: #efebe2;
-    --chip-on: #2f7d5b;
+    --chip: #f5ede1;
+    --chip-on: #a65a3a;
     --danger: #c62828;
     --danger-bg: #fdecea;
-    --ok-bg: #e8f3ed;
+    --ok-bg: #f6e6d6;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #161614;
-      --surface: #22211e;
-      --text: #ece9e2;
-      --muted: #a39e93;
-      --border: #3a3833;
-      --accent: #4fae84;
-      --accent-text: #0e1a14;
-      --chip: #2e2d29;
-      --chip-on: #4fae84;
+      --bg: #18150f;
+      --surface: #24201b;
+      --text: #ede6dc;
+      --muted: #a89d90;
+      --border: #3d362e;
+      --accent: #e0946f;
+      --accent-text: #2a170e;
+      --chip: #312b24;
+      --chip-on: #e0946f;
       --danger: #ff6b6b;
       --danger-bg: #3a1f1f;
-      --ok-bg: #1d3027;
+      --ok-bg: #3a2b20;
     }
   }
   * { box-sizing: border-box; }
@@ -43,7 +43,7 @@
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    font-family: "Hiragino Maru Gothic ProN", "Hiragino Maru Gothic Pro", system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
     font-size: 16px;
     line-height: 1.5;
   }
@@ -56,20 +56,23 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
   .bottom-nav a {
-    flex: 1; max-width: 300px; text-align: center;
-    padding: 12px 0 14px; color: var(--muted); text-decoration: none; font-weight: 700;
+    flex: 1; max-width: 300px; text-align: center; font-size: .8rem;
+    padding: 6px 0 8px; color: var(--muted); text-decoration: none; font-weight: 700;
     border-top: 3px solid transparent; margin-top: -1px;
   }
   .bottom-nav a[aria-current="page"] { color: var(--accent); border-top-color: var(--accent); }
   .bottom-nav .badge { background: var(--danger); color: #fff; }
-  h1 { font-size: 1.35rem; margin: 4px 0 16px; }
+  .nav-icon { display: block; font-size: 1.5rem; line-height: 1.3; }
+  .bottom-nav a:not([aria-current]) .nav-icon { filter: grayscale(.6); opacity: .7; }
+  h1 { font-size: 1.35rem; margin: 4px 0 16px; text-align: center; }
   h2 { font-size: 1.05rem; margin: 0 0 12px; }
   section {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 20px;
     padding: 16px;
     margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(120, 90, 50, .06);
   }
   .finder { display: grid; grid-template-columns: 1fr minmax(0, 42%); gap: 8px; margin-bottom: 12px; }
   .finder input[type="search"] { margin-bottom: 0; min-width: 0; }
@@ -81,6 +84,7 @@
     font-size: .75rem; font-weight: 700; line-height: 1.4em; text-align: center;
   }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .emo { margin-right: .25em; }
   .chip {
     border: 1px solid var(--border);
     background: var(--chip);
@@ -211,16 +215,17 @@
     border: 1px solid var(--accent); border-radius: 10px; padding: 8px 14px;
   }
   .notice { font-size: .9rem; color: var(--muted); margin: 12px 0 0; }
+  .notice a { color: var(--accent); font-weight: 700; }
   .error { color: var(--danger); }
 </style>
 </head>
 <body>
 <main>
-  <h1>冷蔵庫の献立</h1>
+  <h1>🧊 冷蔵庫の献立 🍳</h1>
 
   <div class="screen" id="screen-stock">
     <section aria-labelledby="add-h">
-      <h2 id="add-h">食材を登録</h2>
+      <h2 id="add-h">🛒 食材を登録</h2>
       <div class="finder">
         <input type="search" id="cat-search" placeholder="食材名・既製品名" aria-label="食材名で検索、または既製品名を入力" autocomplete="off" enterkeyhint="search">
         <select id="cat-select" aria-label="カテゴリから選ぶ"></select>
@@ -233,7 +238,7 @@
 
     <section aria-labelledby="stock-h">
       <div class="row" style="justify-content: space-between;">
-        <h2 id="stock-h" style="margin:0">在庫 <span id="stock-count"></span></h2>
+        <h2 id="stock-h" style="margin:0">🧺 在庫 <span id="stock-count"></span></h2>
         <button class="link" id="clear-btn" hidden>すべて削除</button>
       </div>
       <div style="margin-top:12px"><ul class="stock" id="stock-list"></ul></div>
@@ -242,11 +247,11 @@
 
   <div class="screen" id="screen-menu" hidden>
     <section aria-labelledby="suggest-h">
-      <h2 id="suggest-h">献立を提案</h2>
+      <h2 id="suggest-h">🍽️ 献立を提案</h2>
       <p class="notice" id="stock-summary" style="margin:0 0 4px"></p>
       <div class="grid2">
         <div>
-          <label class="field" for="time">調理時間</label>
+          <label class="field" for="time">⏱️ 調理時間</label>
           <select id="time">
             <option value="15">15分以内</option>
             <option value="30" selected>30分以内</option>
@@ -255,25 +260,25 @@
           </select>
         </div>
         <div>
-          <label class="field" for="mood">気分</label>
+          <label class="field" for="mood">💭 気分</label>
           <select id="mood">
-            <option value="">なんでも</option>
-            <option>和食</option>
-            <option>洋食</option>
-            <option>中華</option>
-            <option>エスニック</option>
+            <option value="">🎲 なんでも</option>
+            <option value="和食">🍙 和食</option>
+            <option value="洋食">🍝 洋食</option>
+            <option value="中華">🥟 中華</option>
+            <option value="エスニック">🌶️ エスニック</option>
           </select>
         </div>
       </div>
-      <button class="primary wide" id="suggest-btn">献立を提案</button>
+      <button class="primary wide" id="suggest-btn">✨ 献立を提案 ✨</button>
       <div id="results" aria-live="polite"></div>
     </section>
   </div>
 </main>
 
 <nav class="bottom-nav" aria-label="画面の切り替え">
-  <a href="#stock" id="nav-stock">在庫管理</a>
-  <a href="#menu" id="nav-menu">献立</a>
+  <a href="#stock" id="nav-stock"><span class="nav-icon" aria-hidden="true">🧊</span>在庫管理</a>
+  <a href="#menu" id="nav-menu"><span class="nav-icon" aria-hidden="true">🍳</span>献立</a>
 </nav>
 
 <script>
@@ -297,6 +302,23 @@
     '卵': 'たまご', '牛乳': 'ぎゅうにゅう', '豆腐': 'とうふ', '油揚げ': 'あぶらあげ', '納豆': 'なっとう',
     '中華麺': 'ちゅうかめん', '柿': 'かき',
   };
+  // 見た目用の絵文字。ない食材はカテゴリの絵文字を使う
+  const CAT_EMOJI = {
+    '野菜・きのこ': '🥬', '肉': '🍖', '魚介': '🐟', '卵・乳製品・大豆': '🥚', 'フルーツ': '🍎', '主食・その他': '🍚',
+  };
+  const EMOJI = {
+    '玉ねぎ': '🧅', 'にんじん': '🥕', 'じゃがいも': '🥔', 'キャベツ': '🥬', '白菜': '🥬', 'ねぎ': '🌿', 'ピーマン': '🫑',
+    'なす': '🍆', 'トマト': '🍅', 'きゅうり': '🥒', 'ほうれん草': '🥬', 'ブロッコリー': '🥦', 'もやし': '🌱', 'レタス': '🥬',
+    'かぼちゃ': '🎃', 'しめじ': '🍄', 'えのき': '🍄', 'ごぼう': '🌿', 'にら': '🌿',
+    '豚肉': '🐷', '鶏もも肉': '🍗', '鶏むね肉': '🍗', '牛肉': '🥩', 'ひき肉': '🥩', 'ベーコン': '🥓', 'ハム': '🍖', 'ウインナー': '🌭',
+    '鮭': '🐟', 'さば': '🐟', 'ぶり': '🐟', 'えび': '🦐', 'いか': '🦑', 'ツナ缶': '🥫',
+    '卵': '🥚', '牛乳': '🥛', 'チーズ': '🧀', 'バター': '🧈', '豆腐': '🫘', '油揚げ': '🫘', '納豆': '🫘',
+    'りんご': '🍎', 'バナナ': '🍌', 'みかん': '🍊', 'オレンジ': '🍊', 'グレープフルーツ': '🍊', 'レモン': '🍋', 'いちご': '🍓',
+    'ぶどう': '🍇', 'キウイ': '🥝', 'もも': '🍑', 'なし': '🍐', 'パイナップル': '🍍', 'メロン': '🍈', 'すいか': '🍉',
+    'ブルーベリー': '🫐', 'アボカド': '🥑',
+    'ごはん': '🍚', 'うどん': '🍜', 'パスタ': '🍝', '中華麺': '🍜', 'カレールウ': '🍛', 'キムチ': '🌶️',
+  };
+  const TYPE_EMOJI = { '和食': '🍙', '洋食': '🍝', '中華': '🥟', 'エスニック': '🌶️' };
   const STORAGE_KEY = 'cookingMenu.stock';
   const URGENT_DAYS = 3;
   const RESULT_COUNT = 3;
@@ -440,6 +462,15 @@
       .replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
   }
   const CATALOG_NAMES = Object.values(CATALOG).flat();
+  const CAT_OF = Object.fromEntries(Object.entries(CATALOG).flatMap(([cat, items]) => items.map((n) => [n, cat])));
+  // 名前の前に付ける絵文字（既製品は 🛍️、リスト外は 🍴）
+  function emojiOf(name, product) {
+    if (product) return '🛍️';
+    return EMOJI[name] || CAT_EMOJI[CAT_OF[name]] || '🍴';
+  }
+  function withEmoji(name, product) {
+    return `<span class="emo" aria-hidden="true">${emojiOf(name, product)}</span>${escapeHtml(name)}`;
+  }
   // 入力がリストの食材名（またはよみ）とぴったり一致すれば、その食材名
   function exactCatalogName(q) {
     return CATALOG_NAMES.find((name) => normalize(name) === q || normalize(READINGS[name] || '').split(' ').includes(q));
@@ -449,14 +480,14 @@
       normalize(name).includes(q) || normalize(READINGS[name] || '').includes(q));
   }
   function chipHtml(name) {
-    return `<button type="button" class="chip" data-name="${escapeHtml(name)}" aria-pressed="${selected.has(name)}">${escapeHtml(name)}</button>`;
+    return `<button type="button" class="chip" data-name="${escapeHtml(name)}" aria-pressed="${selected.has(name)}">${withEmoji(name)}</button>`;
   }
   // 最初は食材を並べず、食材名で検索するかカテゴリのプルダウンで選んだときだけ候補を出す
   function renderCatalog() {
     // カテゴリ名の後ろに、そのカテゴリで選んでいる数を出す
-    $('cat-select').innerHTML = `<option value="">カテゴリ</option>` + Object.keys(CATALOG).map((cat) => {
+    $('cat-select').innerHTML = `<option value="">📂 カテゴリ</option>` + Object.keys(CATALOG).map((cat) => {
       const n = CATALOG[cat].filter((name) => selected.has(name)).length;
-      return `<option value="${escapeHtml(cat)}"${cat === activeCat ? ' selected' : ''}>${escapeHtml(cat)}${n ? `（${n}）` : ''}</option>`;
+      return `<option value="${escapeHtml(cat)}"${cat === activeCat ? ' selected' : ''}>${CAT_EMOJI[cat] || ''} ${escapeHtml(cat)}${n ? `（${n}）` : ''}</option>`;
     }).join('');
     $('cat-select').classList.toggle('on', !!activeCat);
     const q = normalize($('cat-search').value);
@@ -488,12 +519,12 @@
     $('selected-note').textContent = selected.size ? `選んだ食材 ${selected.size}件（購入日・賞味期限・残りの量は任意）` : '食材名で検索するか、カテゴリを選んでください。リストにない既製品は名前を入力して追加できます';
     $('picked').innerHTML = [...selected].map(([name, item]) => `
       <li data-name="${escapeHtml(name)}">
-        <span class="name">${escapeHtml(name)}${item.product ? '<span class="kind">既製品</span>' : ''}</span>
+        <span class="name">${withEmoji(name, item.product)}${item.product ? '<span class="kind">既製品</span>' : ''}</span>
         <button type="button" class="del" aria-label="${escapeHtml(name)}を選択から外す">×</button>
         ${fieldsHtml(item, name)}
       </li>`).join('');
     $('add-btn').hidden = selected.size === 0;
-    $('add-btn').textContent = `${selected.size}件を在庫に追加`;
+    $('add-btn').textContent = `🧺 ${selected.size}件を在庫に追加`;
   }
   // 選んだ食材ごとの賞味期限・残りの量
   function onPickedEvent(e) {
@@ -564,7 +595,7 @@
   }
   // 右側の表示：賞味期限があれば期限、なければ購入からの日数
   function expiryCell(s) {
-    if (s.expiry) return `${escapeHtml(expiryLabel(s.days))}<br>${escapeHtml(shortDate(s.expiry))}`;
+    if (s.expiry) return `${isUrgent(s.days) ? '⏰ ' : ''}${escapeHtml(expiryLabel(s.days))}<br>${escapeHtml(shortDate(s.expiry))}`;
     if (s.bought) return `${escapeHtml(boughtLabel(daysSince(s.bought)))}<br>${escapeHtml(shortDate(s.bought))}購入`;
     return escapeHtml(expiryLabel(null));
   }
@@ -574,12 +605,12 @@
     $('stock-count').textContent = list.length ? `(${list.length})` : '';
     $('clear-btn').hidden = list.length === 0;
     if (!list.length) {
-      $('stock-list').innerHTML = '<li class="empty" style="border:none;padding:0">まだ登録されていません</li>';
+      $('stock-list').innerHTML = '<li class="empty" style="border:none;padding:0">🫙 まだ登録されていません</li>';
       return;
     }
     $('stock-list').innerHTML = list.map((s) => `
       <li class="${isUrgent(s.days) ? 'urgent' : ''}" data-id="${escapeHtml(s.id)}">
-        <button type="button" class="item-btn" aria-label="${escapeHtml(s.name)}の購入日・賞味期限・残りの量を変更">${escapeHtml(s.name)}${s.product ? '<span class="kind">既製品</span>' : ''}${subLabel(s)}</button>
+        <button type="button" class="item-btn" aria-label="${escapeHtml(s.name)}の購入日・賞味期限・残りの量を変更">${withEmoji(s.name, s.product)}${s.product ? '<span class="kind">既製品</span>' : ''}${subLabel(s)}</button>
         <button type="button" class="exp-btn" aria-label="${escapeHtml(s.name)}の購入日・賞味期限・残りの量を変更">${expiryCell(s)}</button>
         <button type="button" class="del" aria-label="${escapeHtml(s.name)}を削除">×</button>
         ${s.id === editingId ? `
@@ -680,11 +711,11 @@
       return;
     }
     if (!recipes) {
-      out.innerHTML = '<p class="notice">レシピを読み込み中です…</p>';
+      out.innerHTML = '<p class="notice">📖 レシピを読み込み中です…</p>';
       return;
     }
     if (!stock.some((s) => !s.product)) {
-      out.innerHTML = '<p class="notice">献立に使える食材が在庫にありません。<a href="#stock">在庫管理</a>で食材を登録してください。</p>';
+      out.innerHTML = '<p class="notice">🫙 献立に使える食材が在庫にありません。<a href="#stock">在庫管理</a>で食材を登録してください。</p>';
       return;
     }
     const maxTime = Number($('time').value);
@@ -699,7 +730,7 @@
       .slice(0, RESULT_COUNT);
 
     if (!ranked.length) {
-      out.innerHTML = '<p class="notice">条件に合い、在庫を使えるレシピが見つかりませんでした。調理時間や気分を変えてみてください。</p>';
+      out.innerHTML = '<p class="notice">🤔 条件に合い、在庫を使えるレシピが見つかりませんでした。調理時間や気分を変えてみてください。</p>';
       return;
     }
     out.innerHTML = ranked.map(renderCard).join('') +
@@ -713,13 +744,13 @@
     return `
       <article class="card">
         <h4>${escapeHtml(r.name)}</h4>
-        <p class="meta">${escapeHtml(r.time)}分 ・ ${escapeHtml(r.type || '')} ・ 在庫で${pct}%揃う</p>
+        <p class="meta">⏱️ ${escapeHtml(r.time)}分 ・ ${TYPE_EMOJI[r.type] || '🍴'} ${escapeHtml(r.type || '')} ・ 在庫で${pct}%揃う${pct === 100 ? ' 🎉' : ''}</p>
         <div class="bar"><span style="width:${pct}%"></span></div>
-        <div class="label">使える在庫</div>
-        <div class="tags">${x.have.map((h) => `<span class="tag${isUrgent(h.days) ? ' urgent' : ''}">${escapeHtml(h.name)}${isUrgent(h.days) ? `（${escapeHtml(expiryLabel(h.days))}）` : ''}</span>`).join('')}</div>
-        <div class="label">足りない食材</div>
-        <div class="tags">${x.missing.length ? x.missing.map((m) => `<span class="tag missing">${escapeHtml(m)}</span>`).join('') : '<span class="tag">なし（全部揃っています）</span>'}</div>
-        ${url ? `<a class="recipe-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">レシピを見る ↗</a>` : ''}
+        <div class="label">✅ 使える在庫</div>
+        <div class="tags">${x.have.map((h) => `<span class="tag${isUrgent(h.days) ? ' urgent' : ''}">${withEmoji(h.name)}${isUrgent(h.days) ? `（${escapeHtml(expiryLabel(h.days))}）` : ''}</span>`).join('')}</div>
+        <div class="label">🛒 足りない食材</div>
+        <div class="tags">${x.missing.length ? x.missing.map((m) => `<span class="tag missing">${withEmoji(m)}</span>`).join('') : '<span class="tag">なし（全部揃っています 🎉）</span>'}</div>
+        ${url ? `<a class="recipe-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">📖 レシピを見る ↗</a>` : ''}
       </article>`;
   }
 
@@ -728,7 +759,7 @@
   // ---------- 画面切り替え（#stock = 在庫管理、#menu = 献立） ----------
   function renderNav() {
     const urgent = stock.filter((s) => isUrgent(daysLeft(s.expiry))).length;
-    $('nav-stock').innerHTML = `在庫管理${urgent ? `<span class="badge" aria-label="期限が近いもの${urgent}件">${urgent}</span>` : ''}`;
+    $('nav-stock').innerHTML = `<span class="nav-icon" aria-hidden="true">🧊</span>在庫管理${urgent ? `<span class="badge" aria-label="期限が近いもの${urgent}件">${urgent}</span>` : ''}`;
     const foods = stock.filter((s) => !s.product);
     const nearFoods = foods.filter((s) => isUrgent(daysLeft(s.expiry))).length;
     const products = stock.length - foods.length;
