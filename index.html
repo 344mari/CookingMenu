@@ -108,7 +108,7 @@
   }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   label.field { display: block; font-size: .85rem; color: var(--muted); margin: 14px 0 4px; }
-  input[type="date"], input[type="search"], select {
+  input[type="date"], input[type="search"], input[type="number"], select {
     font: inherit;
     color: var(--text);
     background: var(--bg);
@@ -138,8 +138,23 @@
   }
   .selected-note { font-size: .85rem; color: var(--muted); margin-top: 10px; min-height: 1.5em; }
   ul.picked { list-style: none; margin: 4px 0 0; padding: 0; }
-  ul.picked li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--border); }
-  ul.picked .name { width: 6.5em; flex: none; font-weight: 600; overflow-wrap: anywhere; }
+  ul.picked li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 0; border-top: 1px solid var(--border); }
+  ul.picked .name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+  .fields {
+    flex-basis: 100%; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center;
+    color: var(--text); font-weight: 400;
+  }
+  .fields > .flabel { font-size: .8rem; color: var(--muted); }
+  .fields input[type="date"] { width: 100%; }
+  .amount { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .amount select { min-height: 40px; padding: 6px 8px; }
+  .amt-count { display: inline-flex; gap: 4px; align-items: center; }
+  .amt-count[hidden] { display: none; }
+  .amt-n { width: 3.2em; min-height: 40px; padding: 6px 4px; text-align: center; }
+  .step {
+    font: inherit; font-size: 1.1rem; width: 40px; height: 40px; cursor: pointer;
+    background: var(--chip); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+  }
   ul.stock { list-style: none; margin: 0; padding: 0; }
   ul.stock li {
     display: flex; align-items: center; gap: 10px;
@@ -150,7 +165,12 @@
   }
   ul.stock li.urgent { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); font-weight: 600; }
   ul.stock li { flex-wrap: wrap; }
-  ul.stock .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  ul.stock .item-btn {
+    flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: left;
+    font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer;
+  }
+  .amt-label { display: block; font-size: .8rem; font-weight: 400; color: var(--muted); }
+  .amt-label.empty-count { color: var(--danger); font-weight: 600; }
   .kind {
     display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 999px;
     background: var(--chip); color: var(--muted); font-size: .75rem; font-weight: 600; vertical-align: 2px;
@@ -162,7 +182,8 @@
   }
   .exp-btn::after { content: " ✎"; opacity: .6; }
   ul.stock li:not(.urgent) .exp-btn { color: var(--muted); }
-  ul.stock .edit-row { flex-basis: 100%; display: flex; gap: 8px; align-items: center; }
+  ul.stock .edit-panel { flex-basis: 100%; padding-top: 8px; border-top: 1px dashed var(--border); }
+  ul.stock .edit-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
   .chip.product-add { border-style: dashed; background: none; }
   .del {
     font: inherit; background: none; border: 1px solid var(--border); color: var(--muted);
@@ -280,7 +301,7 @@
   const RESULT_COUNT = 3;
 
   const $ = (id) => document.getElementById(id);
-  const selected = new Map(); // 選択中の名前 → { expiry: 'YYYY-MM-DD' か ''、product: 既製品なら true }
+  const selected = new Map(); // 選択中の名前 → { expiry: 'YYYY-MM-DD' か ''、amount: 残りの量、product: 既製品なら true }
   let activeCat = null; // 開いているカテゴリ。null なら食材は並べない
   let stock = loadStock();
   let editingId = null; // 在庫一覧で賞味期限を編集中の行
@@ -324,6 +345,60 @@
     if (days === 0) return '今日まで';
     if (days === 1) return '明日まで';
     return `あと${days}日`;
+  }
+
+  // ---------- 残りの量 ----------
+  // 数えられるものは「数＋単位」、数えにくいものは「たっぷり／半分くらい／少し」で持つ。未入力は null
+  //   { type: 'count', n: 3, unit: '個' } / { type: 'level', level: 'half' }
+  const UNITS = ['個', '本', '袋', 'パック', '枚', '切れ', '玉', 'g'];
+  const LEVELS = { full: 'たっぷり', half: '半分くらい', low: '少し' };
+  function amountLabel(a) {
+    if (!a) return '';
+    if (a.type === 'count') return `残り${a.n}${a.unit}`;
+    return `残り${LEVELS[a.level] || ''}`;
+  }
+  function amountHtml(a, label) {
+    const type = !a ? '' : a.type === 'count' ? 'count' : a.level;
+    const n = a && a.type === 'count' ? a.n : 1;
+    const unit = a && a.type === 'count' ? a.unit : UNITS[0];
+    const opt = (v, text) => `<option value="${v}"${v === type ? ' selected' : ''}>${text}</option>`;
+    return `<span class="amount">
+        <select class="amt-type" aria-label="${escapeHtml(label)}の残りの量">
+          ${opt('', '未入力')}${opt('count', '数で入力')}${Object.entries(LEVELS).map(([k, v]) => opt(k, v)).join('')}
+        </select>
+        <span class="amt-count"${type === 'count' ? '' : ' hidden'}>
+          <button type="button" class="step" data-step="-1" aria-label="1つ減らす">−</button>
+          <input type="number" class="amt-n" min="0" step="1" inputmode="numeric" value="${escapeHtml(n)}" aria-label="${escapeHtml(label)}の個数">
+          <button type="button" class="step" data-step="1" aria-label="1つ増やす">＋</button>
+          <select class="amt-unit" aria-label="単位">${UNITS.map((u) => `<option${u === unit ? ' selected' : ''}>${u}</option>`).join('')}</select>
+        </span>
+      </span>`;
+  }
+  function readAmount(root) {
+    const type = root.querySelector('.amt-type').value;
+    if (!type) return null;
+    if (type !== 'count') return { type: 'level', level: type };
+    const n = Math.max(0, Math.round(Number(root.querySelector('.amt-n').value) || 0));
+    return { type: 'count', n, unit: root.querySelector('.amt-unit').value };
+  }
+  // 種類の切り替えと −／＋ ボタン。処理したら true
+  function handleAmountUi(e) {
+    const box = e.target.closest('.amount');
+    if (!box) return false;
+    if (e.type === 'change' && e.target.matches('.amt-type')) {
+      box.querySelector('.amt-count').hidden = e.target.value !== 'count';
+      return true;
+    }
+    const step = e.type === 'click' && e.target.closest('.step');
+    if (step) {
+      const input = box.querySelector('.amt-n');
+      input.value = Math.max(0, (Math.round(Number(input.value)) || 0) + Number(step.dataset.step));
+      return true;
+    }
+    return e.type === 'input' || e.type === 'change';
+  }
+  function isEmptyCount(a) {
+    return !!a && a.type === 'count' && a.n === 0;
   }
 
   function escapeHtml(s) {
@@ -382,42 +457,53 @@
   });
   function updateSelection() {
     renderCatalog();
-    $('selected-note').textContent = selected.size ? `選んだ食材 ${selected.size}件（賞味期限は任意）` : '食材名で検索するか、カテゴリを選んでください。リストにない既製品は名前を入力して追加できます';
+    $('selected-note').textContent = selected.size ? `選んだ食材 ${selected.size}件（賞味期限・残りの量は任意）` : '食材名で検索するか、カテゴリを選んでください。リストにない既製品は名前を入力して追加できます';
     $('picked').innerHTML = [...selected].map(([name, item]) => `
-      <li>
+      <li data-name="${escapeHtml(name)}">
         <span class="name">${escapeHtml(name)}${item.product ? '<span class="kind">既製品</span>' : ''}</span>
-        <input type="date" data-name="${escapeHtml(name)}" value="${escapeHtml(item.expiry)}" aria-label="${escapeHtml(name)}の賞味期限">
-        <button type="button" class="del" data-name="${escapeHtml(name)}" aria-label="${escapeHtml(name)}を選択から外す">×</button>
+        <button type="button" class="del" aria-label="${escapeHtml(name)}を選択から外す">×</button>
+        <div class="fields">
+          <span class="flabel">賞味期限</span>
+          <input type="date" value="${escapeHtml(item.expiry)}" aria-label="${escapeHtml(name)}の賞味期限">
+          <span class="flabel">残り</span>
+          ${amountHtml(item.amount, name)}
+        </div>
       </li>`).join('');
     $('add-btn').hidden = selected.size === 0;
     $('add-btn').textContent = `${selected.size}件を在庫に追加`;
   }
-  // 選んだ食材ごとの賞味期限
-  $('picked').addEventListener('input', (e) => {
-    if (e.target.matches('input[type="date"]')) selected.get(e.target.dataset.name).expiry = e.target.value;
-  });
-  $('picked').addEventListener('click', (e) => {
-    const btn = e.target.closest('.del');
-    if (!btn) return;
-    selected.delete(btn.dataset.name);
-    updateSelection();
-  });
+  // 選んだ食材ごとの賞味期限・残りの量
+  function onPickedEvent(e) {
+    const li = e.target.closest('li[data-name]');
+    if (!li) return;
+    const item = selected.get(li.dataset.name);
+    if (e.type === 'click' && e.target.closest('.del')) {
+      selected.delete(li.dataset.name);
+      updateSelection();
+      return;
+    }
+    if (handleAmountUi(e) || e.target.matches('input[type="date"]')) {
+      item.expiry = li.querySelector('input[type="date"]').value;
+      item.amount = readAmount(li);
+    }
+  }
+  ['input', 'change', 'click'].forEach((t) => $('picked').addEventListener(t, onPickedEvent));
   $('catalog').addEventListener('click', (e) => {
     const btn = e.target.closest('.chip');
     if (!btn) return;
     if (btn.dataset.product !== undefined) {
       const name = btn.dataset.product;
-      if (name && !selected.has(name)) selected.set(name, { expiry: '', product: true });
+      if (name && !selected.has(name)) selected.set(name, { expiry: '', amount: null, product: true });
       $('cat-search').value = '';
     } else {
       const name = btn.dataset.name;
-      if (selected.has(name)) selected.delete(name); else selected.set(name, { expiry: '', product: false });
+      if (selected.has(name)) selected.delete(name); else selected.set(name, { expiry: '', amount: null, product: false });
     }
     updateSelection();
   });
   $('add-btn').addEventListener('click', () => {
     for (const [name, item] of selected) {
-      const s = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, expiry: item.expiry || null };
+      const s = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, expiry: item.expiry || null, amount: item.amount };
       if (item.product) s.product = true;
       stock.push(s);
     }
@@ -452,29 +538,44 @@
     }
     $('stock-list').innerHTML = list.map((s) => `
       <li class="${isUrgent(s.days) ? 'urgent' : ''}" data-id="${escapeHtml(s.id)}">
-        <span class="name">${escapeHtml(s.name)}${s.product ? '<span class="kind">既製品</span>' : ''}</span>
-        <button type="button" class="exp-btn" aria-label="${escapeHtml(s.name)}の賞味期限を変更">${escapeHtml(expiryLabel(s.days))}${s.expiry ? `<br>${escapeHtml(s.expiry.slice(5).replace('-', '/'))}` : ''}</button>
+        <button type="button" class="item-btn" aria-label="${escapeHtml(s.name)}の賞味期限・残りの量を変更">${escapeHtml(s.name)}${s.product ? '<span class="kind">既製品</span>' : ''}${s.amount ? `<span class="amt-label${isEmptyCount(s.amount) ? ' empty-count' : ''}">${escapeHtml(amountLabel(s.amount))}</span>` : ''}</button>
+        <button type="button" class="exp-btn" aria-label="${escapeHtml(s.name)}の賞味期限・残りの量を変更">${escapeHtml(expiryLabel(s.days))}${s.expiry ? `<br>${escapeHtml(s.expiry.slice(5).replace('-', '/'))}` : ''}</button>
         <button type="button" class="del" aria-label="${escapeHtml(s.name)}を削除">×</button>
         ${s.id === editingId ? `
-        <div class="edit-row">
-          <input type="date" class="edit-date" value="${escapeHtml(s.expiry || '')}" aria-label="${escapeHtml(s.name)}の新しい賞味期限">
-          <button type="button" class="primary save-exp">保存</button>
-          <button type="button" class="link cancel-exp">やめる</button>
+        <div class="edit-panel">
+          <div class="fields">
+            <span class="flabel">賞味期限</span>
+            <input type="date" class="edit-date" value="${escapeHtml(s.expiry || '')}" aria-label="${escapeHtml(s.name)}の新しい賞味期限">
+            <span class="flabel">残り</span>
+            ${amountHtml(s.amount, s.name)}
+          </div>
+          <div class="edit-actions">
+            <button type="button" class="primary save-exp">保存</button>
+            <button type="button" class="link cancel-exp">やめる</button>
+          </div>
         </div>` : ''}
       </li>`).join('');
   }
+  $('stock-list').addEventListener('change', handleAmountUi);
   $('stock-list').addEventListener('click', (e) => {
+    if (handleAmountUi(e)) return;
     const li = e.target.closest('li[data-id]');
     if (!li) return;
     const id = li.dataset.id;
     if (e.target.closest('.del')) {
       stock = stock.filter((s) => s.id !== id);
       saveStock();
-    } else if (e.target.closest('.exp-btn')) {
+    } else if (e.target.closest('.exp-btn, .item-btn')) {
       editingId = editingId === id ? null : id;
     } else if (e.target.closest('.save-exp')) {
       const item = stock.find((s) => s.id === id);
-      if (item) item.expiry = li.querySelector('.edit-date').value || null; // 空欄で保存すると期限なし
+      if (item) {
+        item.expiry = li.querySelector('.edit-date').value || null; // 空欄で保存すると期限なし
+        item.amount = readAmount(li);
+        if (isEmptyCount(item.amount) && confirm(`${item.name}の残りが0になりました。在庫から削除しますか？`)) {
+          stock = stock.filter((s) => s.id !== id);
+        }
+      }
       editingId = null;
       saveStock();
     } else if (e.target.closest('.cancel-exp')) {
@@ -508,7 +609,7 @@
   function stockIndex() {
     const idx = new Map();
     for (const s of stock) {
-      if (s.product) continue; // 既製品は献立の材料に使わない
+      if (s.product || isEmptyCount(s.amount)) continue; // 既製品と残り0のものは献立の材料に使わない
       const d = daysLeft(s.expiry);
       if (!idx.has(s.name)) { idx.set(s.name, d); continue; }
       const cur = idx.get(s.name);
