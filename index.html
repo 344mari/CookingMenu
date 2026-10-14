@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:">
 <title>冷蔵庫の献立</title>
@@ -47,7 +47,21 @@
     font-size: 16px;
     line-height: 1.5;
   }
-  main { max-width: 600px; margin: 0 auto; padding: 16px 16px 48px; }
+  main { max-width: 600px; margin: 0 auto; padding: 16px 16px calc(88px + env(safe-area-inset-bottom)); }
+  .screen[hidden] { display: none; }
+  .bottom-nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    display: flex; justify-content: center;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .bottom-nav a {
+    flex: 1; max-width: 300px; text-align: center;
+    padding: 12px 0 14px; color: var(--muted); text-decoration: none; font-weight: 700;
+    border-top: 3px solid transparent; margin-top: -1px;
+  }
+  .bottom-nav a[aria-current="page"] { color: var(--accent); border-top-color: var(--accent); }
+  .bottom-nav .badge { background: var(--danger); color: #fff; }
   h1 { font-size: 1.35rem; margin: 4px 0 16px; }
   h2 { font-size: 1.05rem; margin: 0 0 12px; }
   section {
@@ -70,7 +84,7 @@
     padding: 6px 12px; min-height: 36px; cursor: pointer; white-space: nowrap;
   }
   .tab[aria-selected="true"] { color: var(--accent); border-color: var(--accent); font-weight: 700; }
-  .tab .badge {
+  .badge {
     display: inline-block; min-width: 1.4em; margin-left: 4px; padding: 0 5px;
     border-radius: 999px; background: var(--accent); color: var(--accent-text);
     font-size: .75rem; font-weight: 700; line-height: 1.4em; text-align: center;
@@ -135,9 +149,21 @@
     margin-bottom: 8px;
   }
   ul.stock li.urgent { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); font-weight: 600; }
-  ul.stock .name { flex: 1; }
-  ul.stock .exp { font-size: .85rem; white-space: nowrap; }
-  ul.stock li:not(.urgent) .exp { color: var(--muted); }
+  ul.stock li { flex-wrap: wrap; }
+  ul.stock .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .kind {
+    display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 999px;
+    background: var(--chip); color: var(--muted); font-size: .75rem; font-weight: 600; vertical-align: 2px;
+  }
+  .exp-btn {
+    font: inherit; font-size: .85rem; text-align: right; color: inherit;
+    background: none; border: 1px dashed transparent; border-radius: 8px;
+    padding: 2px 6px; min-height: 40px; cursor: pointer; white-space: nowrap;
+  }
+  .exp-btn::after { content: " ✎"; opacity: .6; }
+  ul.stock li:not(.urgent) .exp-btn { color: var(--muted); }
+  ul.stock .edit-row { flex-basis: 100%; display: flex; gap: 8px; align-items: center; }
+  .chip.product-add { border-style: dashed; background: none; }
   .del {
     font: inherit; background: none; border: 1px solid var(--border); color: var(--muted);
     border-radius: 8px; width: 40px; height: 40px; cursor: pointer; font-size: 1.1rem;
@@ -173,51 +199,61 @@
 <main>
   <h1>冷蔵庫の献立</h1>
 
-  <section aria-labelledby="add-h">
-    <h2 id="add-h">食材を登録</h2>
-    <input type="search" id="cat-search" placeholder="食材名で検索（例: たまねぎ）" aria-label="食材名で検索" autocomplete="off" enterkeyhint="search">
-    <div class="tabs" id="cat-tabs" role="tablist" aria-label="食材のカテゴリ"></div>
-    <div id="catalog" role="tabpanel"></div>
-    <p class="selected-note" id="selected-note"></p>
-    <ul class="picked" id="picked"></ul>
-    <button class="primary wide" id="add-btn" hidden>在庫に追加</button>
-  </section>
+  <div class="screen" id="screen-stock">
+    <section aria-labelledby="add-h">
+      <h2 id="add-h">食材を登録</h2>
+      <input type="search" id="cat-search" placeholder="食材名で検索・既製品名を入力" aria-label="食材名で検索、または既製品名を入力" autocomplete="off" enterkeyhint="search">
+      <div class="tabs" id="cat-tabs" role="tablist" aria-label="食材のカテゴリ"></div>
+      <div id="catalog" role="tabpanel"></div>
+      <p class="selected-note" id="selected-note"></p>
+      <ul class="picked" id="picked"></ul>
+      <button class="primary wide" id="add-btn" hidden>在庫に追加</button>
+    </section>
 
-  <section aria-labelledby="stock-h">
-    <div class="row" style="justify-content: space-between;">
-      <h2 id="stock-h" style="margin:0">在庫 <span id="stock-count"></span></h2>
-      <button class="link" id="clear-btn" hidden>すべて削除</button>
-    </div>
-    <div style="margin-top:12px"><ul class="stock" id="stock-list"></ul></div>
-  </section>
+    <section aria-labelledby="stock-h">
+      <div class="row" style="justify-content: space-between;">
+        <h2 id="stock-h" style="margin:0">在庫 <span id="stock-count"></span></h2>
+        <button class="link" id="clear-btn" hidden>すべて削除</button>
+      </div>
+      <div style="margin-top:12px"><ul class="stock" id="stock-list"></ul></div>
+    </section>
+  </div>
 
-  <section aria-labelledby="suggest-h">
-    <h2 id="suggest-h">献立を提案</h2>
-    <div class="grid2">
-      <div>
-        <label class="field" for="time">調理時間</label>
-        <select id="time">
-          <option value="15">15分以内</option>
-          <option value="30" selected>30分以内</option>
-          <option value="60">60分以内</option>
-          <option value="0">指定なし</option>
-        </select>
+  <div class="screen" id="screen-menu" hidden>
+    <section aria-labelledby="suggest-h">
+      <h2 id="suggest-h">献立を提案</h2>
+      <p class="notice" id="stock-summary" style="margin:0 0 4px"></p>
+      <div class="grid2">
+        <div>
+          <label class="field" for="time">調理時間</label>
+          <select id="time">
+            <option value="15">15分以内</option>
+            <option value="30" selected>30分以内</option>
+            <option value="60">60分以内</option>
+            <option value="0">指定なし</option>
+          </select>
+        </div>
+        <div>
+          <label class="field" for="mood">気分</label>
+          <select id="mood">
+            <option value="">なんでも</option>
+            <option>和食</option>
+            <option>洋食</option>
+            <option>中華</option>
+            <option>エスニック</option>
+          </select>
+        </div>
       </div>
-      <div>
-        <label class="field" for="mood">気分</label>
-        <select id="mood">
-          <option value="">なんでも</option>
-          <option>和食</option>
-          <option>洋食</option>
-          <option>中華</option>
-          <option>エスニック</option>
-        </select>
-      </div>
-    </div>
-    <button class="primary wide" id="suggest-btn">献立を提案</button>
-    <div id="results" aria-live="polite"></div>
-  </section>
+      <button class="primary wide" id="suggest-btn">献立を提案</button>
+      <div id="results" aria-live="polite"></div>
+    </section>
+  </div>
 </main>
+
+<nav class="bottom-nav" aria-label="画面の切り替え">
+  <a href="#stock" id="nav-stock">在庫管理</a>
+  <a href="#menu" id="nav-menu">献立</a>
+</nav>
 
 <script>
 (() => {
@@ -244,9 +280,10 @@
   const RESULT_COUNT = 3;
 
   const $ = (id) => document.getElementById(id);
-  const selected = new Map(); // 選択中の食材名 → 賞味期限（'YYYY-MM-DD'、未入力は ''）
+  const selected = new Map(); // 選択中の名前 → { expiry: 'YYYY-MM-DD' か ''、product: 既製品なら true }
   let activeCat = null; // 開いているカテゴリ。null なら食材は並べない
   let stock = loadStock();
+  let editingId = null; // 在庫一覧で賞味期限を編集中の行
   let recipes = null;
   let recipesError = null;
 
@@ -299,8 +336,13 @@
     return s.normalize('NFKC').toLowerCase().trim()
       .replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
   }
+  const CATALOG_NAMES = Object.values(CATALOG).flat();
+  // 入力がリストの食材名（またはよみ）とぴったり一致すれば、その食材名
+  function exactCatalogName(q) {
+    return CATALOG_NAMES.find((name) => normalize(name) === q || normalize(READINGS[name] || '').split(' ').includes(q));
+  }
   function searchCatalog(q) {
-    return Object.values(CATALOG).flat().filter((name) =>
+    return CATALOG_NAMES.filter((name) =>
       normalize(name).includes(q) || normalize(READINGS[name] || '').includes(q));
   }
   function chipHtml(name) {
@@ -314,10 +356,12 @@
     }).join('');
     const q = normalize($('cat-search').value);
     if (q) {
+      const raw = $('cat-search').value.trim().slice(0, 40);
       const hits = searchCatalog(q);
-      $('catalog').innerHTML = hits.length
-        ? `<div class="chips">${hits.map(chipHtml).join('')}</div>`
-        : `<p class="empty">「${escapeHtml($('cat-search').value.trim())}」に一致する食材はありません</p>`;
+      // リストにない名前は既製品として追加できる（既製品は献立の材料に使わない）
+      const productChip = exactCatalogName(q) ? ''
+        : `<button type="button" class="chip product-add" data-product="${escapeHtml(raw)}">＋「${escapeHtml(raw)}」を既製品として追加</button>`;
+      $('catalog').innerHTML = `<div class="chips">${hits.map(chipHtml).join('')}${productChip}</div>`;
     } else if (activeCat) {
       $('catalog').innerHTML = `<div class="chips">${CATALOG[activeCat].map(chipHtml).join('')}</div>`;
     } else {
@@ -338,11 +382,11 @@
   });
   function updateSelection() {
     renderCatalog();
-    $('selected-note').textContent = selected.size ? `選んだ食材 ${selected.size}件（賞味期限は任意）` : '食材名で検索するか、カテゴリを選んでください';
-    $('picked').innerHTML = [...selected].map(([name, expiry]) => `
+    $('selected-note').textContent = selected.size ? `選んだ食材 ${selected.size}件（賞味期限は任意）` : '食材名で検索するか、カテゴリを選んでください。リストにない既製品は名前を入力して追加できます';
+    $('picked').innerHTML = [...selected].map(([name, item]) => `
       <li>
-        <span class="name">${escapeHtml(name)}</span>
-        <input type="date" data-name="${escapeHtml(name)}" value="${escapeHtml(expiry)}" aria-label="${escapeHtml(name)}の賞味期限">
+        <span class="name">${escapeHtml(name)}${item.product ? '<span class="kind">既製品</span>' : ''}</span>
+        <input type="date" data-name="${escapeHtml(name)}" value="${escapeHtml(item.expiry)}" aria-label="${escapeHtml(name)}の賞味期限">
         <button type="button" class="del" data-name="${escapeHtml(name)}" aria-label="${escapeHtml(name)}を選択から外す">×</button>
       </li>`).join('');
     $('add-btn').hidden = selected.size === 0;
@@ -350,7 +394,7 @@
   }
   // 選んだ食材ごとの賞味期限
   $('picked').addEventListener('input', (e) => {
-    if (e.target.matches('input[type="date"]')) selected.set(e.target.dataset.name, e.target.value);
+    if (e.target.matches('input[type="date"]')) selected.get(e.target.dataset.name).expiry = e.target.value;
   });
   $('picked').addEventListener('click', (e) => {
     const btn = e.target.closest('.del');
@@ -361,13 +405,21 @@
   $('catalog').addEventListener('click', (e) => {
     const btn = e.target.closest('.chip');
     if (!btn) return;
-    const name = btn.dataset.name;
-    if (selected.has(name)) selected.delete(name); else selected.set(name, '');
+    if (btn.dataset.product !== undefined) {
+      const name = btn.dataset.product;
+      if (name && !selected.has(name)) selected.set(name, { expiry: '', product: true });
+      $('cat-search').value = '';
+    } else {
+      const name = btn.dataset.name;
+      if (selected.has(name)) selected.delete(name); else selected.set(name, { expiry: '', product: false });
+    }
     updateSelection();
   });
   $('add-btn').addEventListener('click', () => {
-    for (const [name, expiry] of selected) {
-      stock.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, expiry: expiry || null });
+    for (const [name, item] of selected) {
+      const s = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, expiry: item.expiry || null };
+      if (item.product) s.product = true;
+      stock.push(s);
     }
     saveStock();
     selected.clear();
@@ -391,6 +443,7 @@
   }
   function renderStock() {
     const list = sortedStock();
+    renderNav();
     $('stock-count').textContent = list.length ? `(${list.length})` : '';
     $('clear-btn').hidden = list.length === 0;
     if (!list.length) {
@@ -398,17 +451,37 @@
       return;
     }
     $('stock-list').innerHTML = list.map((s) => `
-      <li class="${isUrgent(s.days) ? 'urgent' : ''}">
-        <span class="name">${escapeHtml(s.name)}</span>
-        <span class="exp">${escapeHtml(expiryLabel(s.days))}${s.expiry ? `<br>${escapeHtml(s.expiry.slice(5).replace('-', '/'))}` : ''}</span>
-        <button type="button" class="del" data-id="${escapeHtml(s.id)}" aria-label="${escapeHtml(s.name)}を削除">×</button>
+      <li class="${isUrgent(s.days) ? 'urgent' : ''}" data-id="${escapeHtml(s.id)}">
+        <span class="name">${escapeHtml(s.name)}${s.product ? '<span class="kind">既製品</span>' : ''}</span>
+        <button type="button" class="exp-btn" aria-label="${escapeHtml(s.name)}の賞味期限を変更">${escapeHtml(expiryLabel(s.days))}${s.expiry ? `<br>${escapeHtml(s.expiry.slice(5).replace('-', '/'))}` : ''}</button>
+        <button type="button" class="del" aria-label="${escapeHtml(s.name)}を削除">×</button>
+        ${s.id === editingId ? `
+        <div class="edit-row">
+          <input type="date" class="edit-date" value="${escapeHtml(s.expiry || '')}" aria-label="${escapeHtml(s.name)}の新しい賞味期限">
+          <button type="button" class="primary save-exp">保存</button>
+          <button type="button" class="link cancel-exp">やめる</button>
+        </div>` : ''}
       </li>`).join('');
   }
   $('stock-list').addEventListener('click', (e) => {
-    const btn = e.target.closest('.del');
-    if (!btn) return;
-    stock = stock.filter((s) => s.id !== btn.dataset.id);
-    saveStock();
+    const li = e.target.closest('li[data-id]');
+    if (!li) return;
+    const id = li.dataset.id;
+    if (e.target.closest('.del')) {
+      stock = stock.filter((s) => s.id !== id);
+      saveStock();
+    } else if (e.target.closest('.exp-btn')) {
+      editingId = editingId === id ? null : id;
+    } else if (e.target.closest('.save-exp')) {
+      const item = stock.find((s) => s.id === id);
+      if (item) item.expiry = li.querySelector('.edit-date').value || null; // 空欄で保存すると期限なし
+      editingId = null;
+      saveStock();
+    } else if (e.target.closest('.cancel-exp')) {
+      editingId = null;
+    } else {
+      return;
+    }
     renderStock();
   });
   $('clear-btn').addEventListener('click', () => {
@@ -435,6 +508,7 @@
   function stockIndex() {
     const idx = new Map();
     for (const s of stock) {
+      if (s.product) continue; // 既製品は献立の材料に使わない
       const d = daysLeft(s.expiry);
       if (!idx.has(s.name)) { idx.set(s.name, d); continue; }
       const cur = idx.get(s.name);
@@ -471,8 +545,8 @@
       out.innerHTML = '<p class="notice">レシピを読み込み中です…</p>';
       return;
     }
-    if (!stock.length) {
-      out.innerHTML = '<p class="notice">先に在庫を登録してください。</p>';
+    if (!stock.some((s) => !s.product)) {
+      out.innerHTML = '<p class="notice">献立に使える食材が在庫にありません。<a href="#stock">在庫管理</a>で食材を登録してください。</p>';
       return;
     }
     const maxTime = Number($('time').value);
@@ -513,8 +587,31 @@
 
   $('suggest-btn').addEventListener('click', suggest);
 
+  // ---------- 画面切り替え（#stock = 在庫管理、#menu = 献立） ----------
+  function renderNav() {
+    const urgent = stock.filter((s) => isUrgent(daysLeft(s.expiry))).length;
+    $('nav-stock').innerHTML = `在庫管理${urgent ? `<span class="badge" aria-label="期限が近いもの${urgent}件">${urgent}</span>` : ''}`;
+    const foods = stock.filter((s) => !s.product);
+    const nearFoods = foods.filter((s) => isUrgent(daysLeft(s.expiry))).length;
+    const products = stock.length - foods.length;
+    $('stock-summary').textContent = `在庫の食材 ${foods.length}件` + (nearFoods ? `（うち期限が近いもの ${nearFoods}件）` : '') +
+      (products ? `。既製品 ${products}件は献立に使いません` : '');
+  }
+  function showScreen() {
+    const screen = location.hash === '#menu' ? 'menu' : location.hash === '#stock' ? 'stock' : (stock.some((s) => !s.product) ? 'menu' : 'stock');
+    $('screen-stock').hidden = screen !== 'stock';
+    $('screen-menu').hidden = screen !== 'menu';
+    $('nav-stock').removeAttribute('aria-current');
+    $('nav-menu').removeAttribute('aria-current');
+    $(`nav-${screen}`).setAttribute('aria-current', 'page');
+    if (screen === 'menu' && $('results').innerHTML.trim()) suggest(); // 在庫が変わっていても最新の在庫で出し直す
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener('hashchange', showScreen);
+
   updateSelection();
   renderStock();
+  showScreen();
   loadRecipes();
 })();
 </script>
