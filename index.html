@@ -62,6 +62,7 @@
     margin: 0 -16px 12px; padding: 0 16px 2px;
   }
   .tabs::-webkit-scrollbar { display: none; }
+  .tabs[hidden] { display: none; }
   .tab {
     flex: none;
     font: inherit; font-size: .9rem;
@@ -94,7 +95,7 @@
   }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   label.field { display: block; font-size: .85rem; color: var(--muted); margin: 14px 0 4px; }
-  input[type="date"], select {
+  input[type="date"], input[type="search"], select {
     font: inherit;
     color: var(--text);
     background: var(--bg);
@@ -104,6 +105,7 @@
     min-height: 44px;
   }
   input[type="date"] { flex: 1; min-width: 0; }
+  input[type="search"] { width: 100%; margin-bottom: 8px; }
   button.primary {
     font: inherit;
     font-weight: 700;
@@ -172,6 +174,7 @@
 
   <section aria-labelledby="add-h">
     <h2 id="add-h">食材を登録</h2>
+    <input type="search" id="cat-search" placeholder="食材名で検索（例: たまねぎ）" aria-label="食材名で検索" autocomplete="off" enterkeyhint="search">
     <div class="tabs" id="cat-tabs" role="tablist" aria-label="食材のカテゴリ"></div>
     <div id="catalog" role="tabpanel"></div>
     <p class="selected-note" id="selected-note"></p>
@@ -230,6 +233,14 @@
     '卵・乳製品・大豆': ['卵', '牛乳', 'チーズ', 'バター', '豆腐', '油揚げ', '納豆'],
     '主食・その他': ['ごはん', 'うどん', 'パスタ', '中華麺', 'カレールウ', 'キムチ', 'こんにゃく'],
   };
+  // 漢字を含む食材のよみ。ひらがなで入力しても検索で見つかるようにする
+  const READINGS = {
+    '玉ねぎ': 'たまねぎ', '白菜': 'はくさい', '大根': 'だいこん', 'ほうれん草': 'ほうれんそう',
+    '豚肉': 'ぶたにく', '鶏もも肉': 'とりももにく', '鶏むね肉': 'とりむねにく', '牛肉': 'ぎゅうにく', 'ひき肉': 'ひきにく',
+    '鮭': 'さけ しゃけ', 'ツナ缶': 'つなかん',
+    '卵': 'たまご', '牛乳': 'ぎゅうにゅう', '豆腐': 'とうふ', '油揚げ': 'あぶらあげ', '納豆': 'なっとう',
+    '中華麺': 'ちゅうかめん',
+  };
   const STORAGE_KEY = 'cookingMenu.stock';
   const URGENT_DAYS = 3;
   const RESULT_COUNT = 3;
@@ -285,15 +296,36 @@
   }
 
   // ---------- 食材登録 ----------
-  // カテゴリはタブで切り替え、選んだカテゴリの食材だけを並べる
+  // 検索用に表記をそろえる（全角半角・大文字小文字・カタカナ→ひらがな）
+  function normalize(s) {
+    return s.normalize('NFKC').toLowerCase().trim()
+      .replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+  }
+  function searchCatalog(q) {
+    return Object.values(CATALOG).flat().filter((name) =>
+      normalize(name).includes(q) || normalize(READINGS[name] || '').includes(q));
+  }
+  function chipHtml(name) {
+    return `<button type="button" class="chip" data-name="${escapeHtml(name)}" aria-pressed="${selected.has(name)}">${escapeHtml(name)}</button>`;
+  }
+  // カテゴリはタブで切り替え、選んだカテゴリの食材だけを並べる。検索中は全カテゴリから一致するものを並べる
   function renderCatalog() {
+    const q = normalize($('cat-search').value);
+    $('cat-tabs').hidden = !!q;
+    if (q) {
+      const hits = searchCatalog(q);
+      $('catalog').innerHTML = hits.length
+        ? `<div class="chips">${hits.map(chipHtml).join('')}</div>`
+        : `<p class="empty">「${escapeHtml($('cat-search').value.trim())}」に一致する食材はありません</p>`;
+      return;
+    }
     $('cat-tabs').innerHTML = Object.keys(CATALOG).map((cat) => {
       const n = CATALOG[cat].filter((name) => selected.has(name)).length;
       return `<button type="button" class="tab" role="tab" data-cat="${escapeHtml(cat)}" aria-selected="${cat === activeCat}">${escapeHtml(cat)}${n ? `<span class="badge">${n}</span>` : ''}</button>`;
     }).join('');
-    $('catalog').innerHTML = `<div class="chips">${CATALOG[activeCat].map((name) =>
-      `<button type="button" class="chip" data-name="${escapeHtml(name)}" aria-pressed="${selected.has(name)}">${escapeHtml(name)}</button>`).join('')}</div>`;
+    $('catalog').innerHTML = `<div class="chips">${CATALOG[activeCat].map(chipHtml).join('')}</div>`;
   }
+  $('cat-search').addEventListener('input', renderCatalog);
   $('cat-tabs').addEventListener('click', (e) => {
     const tab = e.target.closest('.tab');
     if (!tab) return;
@@ -320,6 +352,7 @@
     saveStock();
     selected.clear();
     $('expiry').value = '';
+    $('cat-search').value = '';
     updateSelection();
     renderStock();
   });
