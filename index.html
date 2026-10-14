@@ -116,7 +116,6 @@
     min-height: 44px;
     cursor: pointer;
   }
-  button.primary:disabled { opacity: .45; cursor: default; }
   button.primary.wide { width: 100%; margin-top: 16px; font-size: 1.05rem; }
   button.link {
     font: inherit; font-size: .85rem;
@@ -124,6 +123,9 @@
     text-decoration: underline; cursor: pointer; padding: 4px;
   }
   .selected-note { font-size: .85rem; color: var(--muted); margin-top: 10px; min-height: 1.5em; }
+  ul.picked { list-style: none; margin: 4px 0 0; padding: 0; }
+  ul.picked li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--border); }
+  ul.picked .name { width: 6.5em; flex: none; font-weight: 600; overflow-wrap: anywhere; }
   ul.stock { list-style: none; margin: 0; padding: 0; }
   ul.stock li {
     display: flex; align-items: center; gap: 10px;
@@ -177,11 +179,8 @@
     <div class="tabs" id="cat-tabs" role="tablist" aria-label="食材のカテゴリ"></div>
     <div id="catalog" role="tabpanel"></div>
     <p class="selected-note" id="selected-note"></p>
-    <label class="field" for="expiry">賞味期限（任意・選んだ食材すべてに設定）</label>
-    <div class="row">
-      <input type="date" id="expiry">
-      <button class="primary" id="add-btn" disabled>追加</button>
-    </div>
+    <ul class="picked" id="picked"></ul>
+    <button class="primary wide" id="add-btn" hidden>在庫に追加</button>
   </section>
 
   <section aria-labelledby="stock-h">
@@ -245,7 +244,7 @@
   const RESULT_COUNT = 3;
 
   const $ = (id) => document.getElementById(id);
-  const selected = new Set();
+  const selected = new Map(); // 選択中の食材名 → 賞味期限（'YYYY-MM-DD'、未入力は ''）
   let activeCat = null; // 開いているカテゴリ。null なら食材は並べない
   let stock = loadStock();
   let recipes = null;
@@ -339,24 +338,39 @@
   });
   function updateSelection() {
     renderCatalog();
-    $('selected-note').textContent = selected.size ? `選択中: ${[...selected].join('、')}` : '食材名で検索するか、カテゴリを選んでください';
-    $('add-btn').disabled = selected.size === 0;
+    $('selected-note').textContent = selected.size ? `選んだ食材 ${selected.size}件（賞味期限は任意）` : '食材名で検索するか、カテゴリを選んでください';
+    $('picked').innerHTML = [...selected].map(([name, expiry]) => `
+      <li>
+        <span class="name">${escapeHtml(name)}</span>
+        <input type="date" data-name="${escapeHtml(name)}" value="${escapeHtml(expiry)}" aria-label="${escapeHtml(name)}の賞味期限">
+        <button type="button" class="del" data-name="${escapeHtml(name)}" aria-label="${escapeHtml(name)}を選択から外す">×</button>
+      </li>`).join('');
+    $('add-btn').hidden = selected.size === 0;
+    $('add-btn').textContent = `${selected.size}件を在庫に追加`;
   }
+  // 選んだ食材ごとの賞味期限
+  $('picked').addEventListener('input', (e) => {
+    if (e.target.matches('input[type="date"]')) selected.set(e.target.dataset.name, e.target.value);
+  });
+  $('picked').addEventListener('click', (e) => {
+    const btn = e.target.closest('.del');
+    if (!btn) return;
+    selected.delete(btn.dataset.name);
+    updateSelection();
+  });
   $('catalog').addEventListener('click', (e) => {
     const btn = e.target.closest('.chip');
     if (!btn) return;
     const name = btn.dataset.name;
-    if (selected.has(name)) selected.delete(name); else selected.add(name);
+    if (selected.has(name)) selected.delete(name); else selected.set(name, '');
     updateSelection();
   });
   $('add-btn').addEventListener('click', () => {
-    const expiry = $('expiry').value || null;
-    for (const name of selected) {
-      stock.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, expiry });
+    for (const [name, expiry] of selected) {
+      stock.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, expiry: expiry || null });
     }
     saveStock();
     selected.clear();
-    $('expiry').value = '';
     $('cat-search').value = '';
     activeCat = null;
     updateSelection();
