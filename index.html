@@ -108,7 +108,12 @@
     padding: 8px 10px;
     min-height: 44px;
   }
-  input[type="date"] { flex: 1; min-width: 0; }
+  /* iOS Safari の日付欄は既定の最小幅で枠からはみ出すので、見た目をリセットして幅に収める */
+  input[type="date"] {
+    -webkit-appearance: none; appearance: none;
+    display: block; width: 100%; min-width: 0; max-width: 100%; text-align: left;
+  }
+  input[type="date"]::-webkit-date-and-time-value { text-align: left; }
   input[type="search"] { width: 100%; margin-bottom: 8px; }
   button.primary {
     font: inherit;
@@ -131,12 +136,14 @@
   ul.picked { list-style: none; margin: 4px 0 0; padding: 0; }
   ul.picked li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 0; border-top: 1px solid var(--border); }
   ul.picked .name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+  /* 購入日・賞味期限を横に2つ、残りの量はその下に全幅で並べる */
   .fields {
-    flex-basis: 100%; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center;
+    flex-basis: 100%; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
     color: var(--text); font-weight: 400;
   }
-  .fields > .flabel { font-size: .8rem; color: var(--muted); }
-  .fields input[type="date"] { width: 100%; }
+  .fld { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .fld.full { grid-column: 1 / -1; }
+  .flabel { font-size: .8rem; color: var(--muted); }
   .amount { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .amount select { min-height: 40px; padding: 6px 8px; }
   .amt-count { display: inline-flex; gap: 4px; align-items: center; }
@@ -295,7 +302,7 @@
   const RESULT_COUNT = 3;
 
   const $ = (id) => document.getElementById(id);
-  const selected = new Map(); // 選択中の名前 → { expiry: 'YYYY-MM-DD' か ''、amount: 残りの量、product: 既製品なら true }
+  const selected = new Map(); // 選択中の名前 → { bought・expiry: 'YYYY-MM-DD' か ''（購入日は今日が初期値）、amount: 残りの量、product: 既製品なら true }
   let activeCat = null; // 開いているカテゴリ。null なら食材は並べない
   let stock = loadStock();
   let editingId = null; // 在庫一覧で賞味期限を編集中の行
@@ -329,6 +336,23 @@
     if (!expiry) return null;
     const [y, m, d] = expiry.split('-').map(Number);
     return Math.round((new Date(y, m - 1, d) - today()) / 86400000);
+  }
+  function toYmd(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  function shortDate(ymd) {
+    return ymd.slice(5).replace('-', '/');
+  }
+  // 購入日から何日たったか（今日=0）。購入日なしは null
+  function daysSince(bought) {
+    const d = daysLeft(bought);
+    return d === null ? null : -d;
+  }
+  function boughtLabel(days) {
+    if (days === 0) return '今日購入';
+    if (days === 1) return '昨日購入';
+    if (days < 0) return '購入予定';
+    return `購入から${days}日`;
   }
   function isUrgent(days) {
     return days !== null && days <= URGENT_DAYS;
@@ -391,6 +415,16 @@
     }
     return e.type === 'input' || e.type === 'change';
   }
+  // 購入日・賞味期限・残りの量の入力欄（登録時と在庫の編集で共通）
+  function fieldsHtml(item, label) {
+    return `<div class="fields">
+          <label class="fld"><span class="flabel">購入日</span>
+            <input type="date" class="in-bought" value="${escapeHtml(item.bought || '')}" aria-label="${escapeHtml(label)}の購入日"></label>
+          <label class="fld"><span class="flabel">賞味期限</span>
+            <input type="date" class="in-expiry" value="${escapeHtml(item.expiry || '')}" aria-label="${escapeHtml(label)}の賞味期限"></label>
+          <div class="fld full"><span class="flabel">残り</span>${amountHtml(item.amount, label)}</div>
+        </div>`;
+  }
   function isEmptyCount(a) {
     return !!a && a.type === 'count' && a.n === 0;
   }
@@ -451,17 +485,12 @@
   });
   function updateSelection() {
     renderCatalog();
-    $('selected-note').textContent = selected.size ? `選んだ食材 ${selected.size}件（賞味期限・残りの量は任意）` : '食材名で検索するか、カテゴリを選んでください。リストにない既製品は名前を入力して追加できます';
+    $('selected-note').textContent = selected.size ? `選んだ食材 ${selected.size}件（購入日・賞味期限・残りの量は任意）` : '食材名で検索するか、カテゴリを選んでください。リストにない既製品は名前を入力して追加できます';
     $('picked').innerHTML = [...selected].map(([name, item]) => `
       <li data-name="${escapeHtml(name)}">
         <span class="name">${escapeHtml(name)}${item.product ? '<span class="kind">既製品</span>' : ''}</span>
         <button type="button" class="del" aria-label="${escapeHtml(name)}を選択から外す">×</button>
-        <div class="fields">
-          <span class="flabel">賞味期限</span>
-          <input type="date" value="${escapeHtml(item.expiry)}" aria-label="${escapeHtml(name)}の賞味期限">
-          <span class="flabel">残り</span>
-          ${amountHtml(item.amount, name)}
-        </div>
+        ${fieldsHtml(item, name)}
       </li>`).join('');
     $('add-btn').hidden = selected.size === 0;
     $('add-btn').textContent = `${selected.size}件を在庫に追加`;
@@ -477,7 +506,8 @@
       return;
     }
     if (handleAmountUi(e) || e.target.matches('input[type="date"]')) {
-      item.expiry = li.querySelector('input[type="date"]').value;
+      item.bought = li.querySelector('.in-bought').value;
+      item.expiry = li.querySelector('.in-expiry').value;
       item.amount = readAmount(li);
     }
   }
@@ -487,17 +517,17 @@
     if (!btn) return;
     if (btn.dataset.product !== undefined) {
       const name = btn.dataset.product;
-      if (name && !selected.has(name)) selected.set(name, { expiry: '', amount: null, product: true });
+      if (name && !selected.has(name)) selected.set(name, { bought: toYmd(today()), expiry: '', amount: null, product: true });
       $('cat-search').value = '';
     } else {
       const name = btn.dataset.name;
-      if (selected.has(name)) selected.delete(name); else selected.set(name, { expiry: '', amount: null, product: false });
+      if (selected.has(name)) selected.delete(name); else selected.set(name, { bought: toYmd(today()), expiry: '', amount: null, product: false });
     }
     updateSelection();
   });
   $('add-btn').addEventListener('click', () => {
     for (const [name, item] of selected) {
-      const s = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, expiry: item.expiry || null, amount: item.amount };
+      const s = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, bought: item.bought || null, expiry: item.expiry || null, amount: item.amount };
       if (item.product) s.product = true;
       stock.push(s);
     }
@@ -515,11 +545,28 @@
       .map((s) => ({ ...s, days: daysLeft(s.expiry) }))
       .sort((a, b) => {
         // 期限なしは最後、それ以外は期限の近い順（＝3日以内が必ず上に来る）
-        if (a.days === null && b.days === null) return a.name.localeCompare(b.name, 'ja');
+        // 期限なし同士は購入日の古い順（購入日なしはその後ろ）、最後に名前順
+        if (a.days === null && b.days === null) {
+          return (a.bought || '9999').localeCompare(b.bought || '9999') || a.name.localeCompare(b.name, 'ja');
+        }
         if (a.days === null) return 1;
         if (b.days === null) return -1;
         return a.days - b.days;
       });
+  }
+  // 名前の下の小さな行：残りの量と購入日
+  function subLabel(s) {
+    const parts = [];
+    if (s.amount) parts.push(amountLabel(s.amount));
+    if (s.bought && s.expiry) parts.push(`${shortDate(s.bought)}購入`);
+    if (!parts.length) return '';
+    return `<span class="amt-label${isEmptyCount(s.amount) ? ' empty-count' : ''}">${escapeHtml(parts.join('・'))}</span>`;
+  }
+  // 右側の表示：賞味期限があれば期限、なければ購入からの日数
+  function expiryCell(s) {
+    if (s.expiry) return `${escapeHtml(expiryLabel(s.days))}<br>${escapeHtml(shortDate(s.expiry))}`;
+    if (s.bought) return `${escapeHtml(boughtLabel(daysSince(s.bought)))}<br>${escapeHtml(shortDate(s.bought))}購入`;
+    return escapeHtml(expiryLabel(null));
   }
   function renderStock() {
     const list = sortedStock();
@@ -532,17 +579,12 @@
     }
     $('stock-list').innerHTML = list.map((s) => `
       <li class="${isUrgent(s.days) ? 'urgent' : ''}" data-id="${escapeHtml(s.id)}">
-        <button type="button" class="item-btn" aria-label="${escapeHtml(s.name)}の賞味期限・残りの量を変更">${escapeHtml(s.name)}${s.product ? '<span class="kind">既製品</span>' : ''}${s.amount ? `<span class="amt-label${isEmptyCount(s.amount) ? ' empty-count' : ''}">${escapeHtml(amountLabel(s.amount))}</span>` : ''}</button>
-        <button type="button" class="exp-btn" aria-label="${escapeHtml(s.name)}の賞味期限・残りの量を変更">${escapeHtml(expiryLabel(s.days))}${s.expiry ? `<br>${escapeHtml(s.expiry.slice(5).replace('-', '/'))}` : ''}</button>
+        <button type="button" class="item-btn" aria-label="${escapeHtml(s.name)}の購入日・賞味期限・残りの量を変更">${escapeHtml(s.name)}${s.product ? '<span class="kind">既製品</span>' : ''}${subLabel(s)}</button>
+        <button type="button" class="exp-btn" aria-label="${escapeHtml(s.name)}の購入日・賞味期限・残りの量を変更">${expiryCell(s)}</button>
         <button type="button" class="del" aria-label="${escapeHtml(s.name)}を削除">×</button>
         ${s.id === editingId ? `
         <div class="edit-panel">
-          <div class="fields">
-            <span class="flabel">賞味期限</span>
-            <input type="date" class="edit-date" value="${escapeHtml(s.expiry || '')}" aria-label="${escapeHtml(s.name)}の新しい賞味期限">
-            <span class="flabel">残り</span>
-            ${amountHtml(s.amount, s.name)}
-          </div>
+          ${fieldsHtml(s, s.name)}
           <div class="edit-actions">
             <button type="button" class="primary save-exp">保存</button>
             <button type="button" class="link cancel-exp">やめる</button>
@@ -564,7 +606,8 @@
     } else if (e.target.closest('.save-exp')) {
       const item = stock.find((s) => s.id === id);
       if (item) {
-        item.expiry = li.querySelector('.edit-date').value || null; // 空欄で保存すると期限なし
+        item.bought = li.querySelector('.in-bought').value || null;
+        item.expiry = li.querySelector('.in-expiry').value || null; // 空欄で保存すると期限なし
         item.amount = readAmount(li);
         if (isEmptyCount(item.amount) && confirm(`${item.name}の残りが0になりました。在庫から削除しますか？`)) {
           stock = stock.filter((s) => s.id !== id);
